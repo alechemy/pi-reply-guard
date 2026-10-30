@@ -39,7 +39,7 @@ export async function main(args, { registry, fetch: requestFetch } = {}) {
     const data = await auditCandidate({ catalog: result, text, request, verbatim, conversation, limits, adapter });
     return { data, code: data.status === "failed" ? 1 : data.coverageComplete ? 0 : 2 };
   }
-  const view = createView(text, { verbatim });
+  const view = createView(text, { request, verbatim });
   const local = evaluateLocal(result, view);
   const semantic = planSemanticChecks(result, view, request).map(({ id, outcome, disposition, reason }) => ({ id, outcome, disposition, ...(reason ? { reason } : {}) }));
   return { data: { local, semantic, catalogIssues: result.issues }, code: local.status === "failed" ? 1 : local.incomplete ? 2 : 0 };

@@ -33,7 +33,7 @@ export function answer(body) {
   return { model: body.model, answers: Object.fromEntries(Object.keys(body.questions).map((id) => [id, { type: "noul", noul: id === "preserve-quantities" && body.state.revision === bad ? 1 : 0 }])) };
 }
 
-export async function setup({ config = {}, configText, catalog = makeCatalog(), skillText = skill, missingSkill = false, text = original, replies = [good], classify = answer, priorManager, afterBoundary, onMain } = {}) {
+export async function setup({ config = {}, configText, catalog = makeCatalog(), skillText = skill, missingSkill = false, text = original, replies = [good], classify = answer, priorManager, beforeBoundary, afterBoundary, onInput, mainReplies, onMain } = {}) {
   const skillPath = join(home, "SKILL.md");
   writeFileSync(skillPath, skillText);
   writeFileSync(join(home, "reply-guard.rules.json"), JSON.stringify(catalog));
@@ -42,6 +42,7 @@ export async function setup({ config = {}, configText, catalog = makeCatalog(), 
   let writes = 0;
   let toolCalls = 0;
   let ctx;
+  let extensionAPI;
   const calls = [];
   const requests = [];
   const errors = [];
@@ -63,6 +64,8 @@ export async function setup({ config = {}, configText, catalog = makeCatalog(), 
     cwd: home, agentDir, settingsManager, noSkills: true, noPromptTemplates: true, noThemes: true, noContextFiles: true,
     additionalExtensionPaths: [join(root, "extensions/reply-guard.ts")], skillsOverride: () => ({ skills, diagnostics: [] }),
     extensionFactories: [(pi) => {
+      extensionAPI = pi;
+      if (onInput) pi.on("input", onInput);
       pi.registerTool({ name: "counted_tool", label: "Counted", description: "Count task execution.", parameters: { type: "object", properties: {}, additionalProperties: false }, execute: async () => { toolCalls++; return { content: [{ type: "text", text: "Executed." }], details: undefined }; } });
       pi.registerProvider(model.provider, { api: model.api, baseUrl: model.baseUrl, apiKey: "fictional-writer-key", models: [model], streamSimple(_model, context, options) {
         const stream = new ai.AssistantMessageEventStream();
@@ -73,7 +76,7 @@ export async function setup({ config = {}, configText, catalog = makeCatalog(), 
           assert.equal(context.tools?.length ?? 0, 0);
           reply = replies[writes++];
           assert.notEqual(reply, undefined, "Unbounded writer loop");
-        } else { requests.push(context); reply = requests.length === 1 && !priorManager ? text : "Follow-up reply."; onMain?.(); }
+        } else { requests.push(context); reply = mainReplies?.[requests.length - 1] ?? (requests.length === 1 && !priorManager ? text : "Follow-up reply."); onMain?.(); }
         Promise.resolve(typeof reply === "function" ? reply(options) : reply).then((value) => {
           const stopReason = value === "TOOL" ? "toolUse" : value === "ERROR" ? "error" : "stop";
           const content = value === "TOOL" ? [{ type: "toolCall", id: "fictional-call", name: "counted_tool", arguments: {} }] : [{ type: "text", text: value === "ERROR" ? "" : value }];
@@ -83,12 +86,13 @@ export async function setup({ config = {}, configText, catalog = makeCatalog(), 
         return stream;
       } });
       pi.on("before_agent_start", (_event, context) => { ctx = context; });
-      pi.on("agent_before_settle", (event) => afterBoundary?.(event) ?? { entries: [...event.entries, { type: "custom", customType: "other-extension", data: { retained: true } }] });
+      pi.on("agent_before_settle", (event, context) => afterBoundary?.(event, context) ?? { entries: [...event.entries, { type: "custom", customType: "other-extension", data: { retained: true } }] });
     }],
   });
   await resourceLoader.reload();
   assert.deepEqual(resourceLoader.getExtensions().errors, []);
   const extension = resourceLoader.getExtensions().extensions.find((extension) => extension.commands.has("reply-guard"));
+  if (beforeBoundary) extension.handlers.get("agent_before_settle").unshift(beforeBoundary);
   const runtime = await sdk.ModelRuntime.create({ authPath: join(agentDir, "auth.json"), modelsPath: join(agentDir, "models.json") });
   const sessionManager = priorManager ?? sdk.SessionManager.create(home, join(home, "sessions"));
   const { session } = await sdk.createAgentSession({ cwd: home, agentDir, resourceLoader, settingsManager, modelRuntime: runtime, model, thinkingLevel: "off", sessionManager, tools: [] });
@@ -100,5 +104,6 @@ export async function setup({ config = {}, configText, catalog = makeCatalog(), 
     return [];
   }).join("\n");
   const command = (args) => extension.commands.get("reply-guard").handler(args, { ...ctx, hasUI: true, ui, sessionManager, getSystemPromptOptions: () => ({ skills }) });
-  return { session, sessionManager, extension, calls, requests, errors, notices, statuses, editors, ui, results, render, command, writes: () => writes, toolCalls: () => toolCalls };
+  return { session, sessionManager, extension, calls, requests, errors, notices, statuses, editors, ui, results, render, command,
+    feedback: () => extensionAPI.sendMessage({ customType: "fixture-feedback", content: "Continue the same request.", display: false }, { triggerTurn: true }), writes: () => writes, toolCalls: () => toolCalls };
 }

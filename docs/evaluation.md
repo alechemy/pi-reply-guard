@@ -1,6 +1,6 @@
 # Per-rule evaluation
 
-The evaluator runs the catalog's semantic questions through Pi's native classifier registry. All 44 house semantic checks remain advisory. The two local punctuation checks remain active. This development checkpoint exposes a diagnostic CLI and a reusable audit function. The package entry point still uses the legacy evaluator until delivery policies and rendering adopt the [new repair lifecycle](repair.md).
+The evaluator runs the catalog's semantic questions through Pi's native classifier registry. All 44 house semantic checks remain advisory. The two local punctuation checks remain active. The diagnostic CLI and package entry point share the audit function. The package integrates it with the [repair lifecycle](repair.md) and [delivery policies](delivery.md).
 
 ## Diagnostic audit
 
@@ -78,7 +78,7 @@ const result = await auditCandidate({
 });
 ```
 
-The caller supplies a validated catalog and trusted provenance. Keep the same catalog and adapter snapshot throughout a repair session. Pass the original Markdown view as `baseline` when checking a revision. This enables [mandatory preservation checks](repair.md#required-preservation-checks), keeps the original meaning reference, and prevents new wrappers from exempting prose. The preservation model judgments remain uncalibrated.
+The caller supplies a validated catalog and any verified external provenance. The evaluator also resolves explicit reproduction sources from the consumed request before local checks. Ambiguous intent remains incomplete. Keep the same catalog and adapter snapshot throughout a repair session. Pass the original Markdown view as `baseline` when checking a revision. This enables [mandatory preservation checks](repair.md#required-preservation-checks), keeps the original meaning reference, and prevents new wrappers from exempting prose. The preservation model judgments remain uncalibrated.
 
 The cache holds at most 256 judgments for 15 minutes. Keys bind the exact candidate, evaluated state, question, threshold, definition, catalog, evaluator version, and model identity. Endpoint identity is hashed. Values contain only probabilities and the verified model ID. Successful answers from partial batches can be reused. Transport failures and protocol-invalid batches are not cached. There is no persistent cache.
 

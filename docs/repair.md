@@ -1,6 +1,6 @@
 # Preservation and isolated repair
 
-The repair engine audits each revision against the original draft and selects the latest candidate that passes preservation checks. Its Pi lifecycle adapter audits at `message_end`, repairs at `turn_end`, and persists the selected text through a context edit at `agent_before_settle`.
+The repair engine audits each revision against the original draft and selects the latest candidate that passes preservation checks. Its Pi lifecycle adapter audits at `message_end`, repairs at `turn_end`, prepares a context edit at `agent_before_settle`, and confirms delivery at `agent_settled`.
 
 The package entry point uses this lifecycle on Pi 1.4.0. [Delivery and operating modes](delivery.md) documents warning and strict policies, terminal suppression, and draft recovery.
 
@@ -20,7 +20,7 @@ Passing `baseline: originalView` to `auditCandidate()` adds a literal comparison
 | Invention | No unsupported facts, examples, mechanisms, causes, or personal experiences. |
 | Omission | Useful meaning, necessary limitations, and instructions remain intact. |
 
-The literal comparison checks protected bytes, multiplicity, order, and newly introduced wrappers. Semantic checks compare the complete exact original and revision. Oversized comparisons remain incomplete.
+The literal comparison checks protected bytes, multiplicity, order, and newly introduced wrappers. Explicit reproduction sources from the consumed request enter the original baseline and every revision's protection map. Semantic checks compare the complete exact original and revision. Oversized comparisons remain incomplete.
 
 For each semantic condition, `P(damage) <= 0.1` clears the check. Values at or above 0.9 indicate a violation. Intermediate values, missing answers, and malformed answers remain inconclusive. These experimental thresholds are uncalibrated. Every condition must clear before a revision can become a delivery candidate. Semantic style checks retain their advisory status.
 
@@ -56,9 +56,9 @@ The lifecycle adapter snapshots those inputs for the request. It invalidates pen
 
 The adapter preserves other extensions' boundary entries and continuation decisions. It defers repair when an earlier handler requests continuation. A competing content edit supersedes the audited draft and causes withholding.
 
-Pi 1.4.0 exposes the active operation signal during `turn_end` but clears it before `agent_before_settle`. Isolated repair therefore runs at the turn boundary. Settlement performs the delivery decision without awaiting model work. Turn-boundary cleanup also omits cancelled drafts when an abort skips final settlement.
+Pi 1.4.0 exposes the active operation signal during `turn_end` but clears it before `agent_before_settle`. Isolated repair therefore runs at the turn boundary. Settlement preparation performs no model work. The final event's `aborted` flag and committed projection determine publication. Pending or withheld selections are filtered from subsequent requests until boundary cleanup can persist an omission edit. Turn-boundary cleanup also omits cancelled drafts when an abort skips final settlement.
 
-`repairBoundary()` binds the selected text to its candidate hash and matching audit, then appends a context edit against the original assistant entry. The raw draft and its usage remain intact. Rejected revisions and internal editing instructions are never appended as conversational messages. Separate custom metadata records candidate hashes, audits, preservation decisions, termination, and writer usage.
+`repairBoundary()` binds the selected text to its candidate hash and matching audit, then appends a context edit against the original assistant entry. The raw draft and its usage remain intact. Rejected revisions and internal editing instructions are never appended as conversational messages. The prepared metadata records candidate hashes, audits, preservation decisions, termination, and writer usage. The final result is appended only after settlement validation.
 
 Installed-SDK tests verify canonical text on the next user turn and after reopening the saved session. Package-entry tests also cover native terminal rendering, strict withholding, recovery, operating modes, and aborting both classification and isolated repair.
 

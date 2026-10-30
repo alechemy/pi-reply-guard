@@ -13,6 +13,7 @@ test("CLI catalog checks, coverage, and local audits are network-free", async (t
   const catalogPath = join(directory, "catalog.json");
   const skillPath = join(directory, "SKILL.md");
   const textPath = join(directory, "reply.md");
+  const requestPath = join(directory, "request.txt");
   await writeFile(catalogPath, JSON.stringify(makeCatalog()));
   await writeFile(skillPath, skill);
   const flags = ["--catalog", catalogPath, "--skill", skillPath];
@@ -28,6 +29,10 @@ test("CLI catalog checks, coverage, and local audits are network-free", async (t
   assert.ok(clean.data.semantic.every((check) => check.outcome === "pending"));
   await writeFile(textPath, "Words—here.");
   assert.equal((await main(["audit-local", ...flags, "--text", textPath])).code, 1);
+  await writeFile(requestPath, "Reproduce exactly: Words—here.");
+  assert.equal((await main(["audit-local", ...flags, "--text", textPath, "--request", requestPath])).code, 0);
+  await writeFile(requestPath, "Reproduce the previous answer exactly.");
+  assert.equal((await main(["audit-local", ...flags, "--text", textPath, "--request", requestPath])).code, 2);
   await writeFile(textPath, "```text\nWords—here.\n```");
   assert.equal((await main(["audit-local", ...flags, "--text", textPath])).code, 2);
   await writeFile(skillPath, skill.replace("Fictional policy 13.", "Changed policy."));

@@ -204,7 +204,7 @@ test("cancelled audits, stale request identity, and audit failures cannot releas
 
 test("later settlement boundaries cannot replenish a request's repair budget", async () => {
   const handlers = new Map();
-  const pi = { on: (event, handler) => { handlers.set(event, [...(handlers.get(event) ?? []), handler]); } };
+  const pi = { on: (event, handler) => { handlers.set(event, [...(handlers.get(event) ?? []), handler]); }, appendEntry() {} };
   registerRepairLifecycle(pi, async () => ({ catalog, adapter: adapter(), maxRewrites: 1 }));
   let writes = 0;
   const ctx = { model, signal: new AbortController().signal,
@@ -296,6 +296,9 @@ test("boundary edits preserve other entries and bind the exact selected candidat
   assert.deepEqual(boundary.entries[0], other);
   assert.equal(boundary.entries[1].replacement.content[0].text, result.selected.text);
   assert.equal(boundary.entries[2].data.audit.candidateHash, digest(result.selected.text));
+  assert.equal(boundary.entries[2].customType, "reply-guard-prepared");
+  assert.equal(boundary.entries[2].data.delivery, "pending");
+  assert.equal(boundary.entries[2].data.intendedDelivery, "released");
   assert.equal(boundary.continue, undefined);
   assert.equal(repairBoundary({ ...event, continue: true }, args), undefined);
   assert.equal(repairBoundary({ ...event, outcome: "aborted" }, args), undefined);

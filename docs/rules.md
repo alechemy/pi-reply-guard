@@ -2,7 +2,7 @@
 
 The catalog maps all 36 Unslop rules to 46 checks. The two literal predicates are active for eligible prose. The 44 semantic questions are advisory, with an experimental violation threshold of 0.9. The catalog contains 138 synthetic examples. None establishes calibration accuracy.
 
-The catalog feeds the [per-rule evaluator](evaluation.md), which provides bounded Jev execution and diagnostic auditing. The Pi entry point still uses the legacy whole-skill evaluator until preservation and isolated repair are integrated.
+The catalog feeds the [per-rule evaluator](evaluation.md), which provides bounded Jev execution and diagnostic auditing. The Pi entry point uses this evaluator with [preservation-checked repair](repair.md) and [delivery policies](delivery.md).
 
 ## Files
 
@@ -14,6 +14,7 @@ The catalog feeds the [per-rule evaluator](evaluation.md), which provides bounde
 | `schemas/catalog.schema.json` | Catalog schema, shipped with the fork. |
 | `lib/catalog.mjs` | Schema validation, source drift detection, and coverage rendering. |
 | `lib/markdown.mjs` | Positioned Markdown parsing, protection map, and literal preservation comparison. |
+| `lib/provenance.mjs` | Request-derived literal sources and unresolved reproduction intent. |
 | `lib/local-checks.mjs` | Literal evaluation and typed semantic plans. |
 | `lib/evaluator.mjs` | Per-rule execution, chunk coverage, budgets, and structured findings. |
 | `lib/jev.mjs` | Native Pi classifier adapter with partial-answer and served-model validation. |
@@ -57,7 +58,9 @@ The active predicates detect U+2014 and quotation characters U+2018 through U+20
 
 The protection map records exact code, link destinations, references, recognized paths and identifiers, shell-prompt commands, and verified verbatim text. Link and image labels remain eligible. Recognition of bare technical tokens is conservative. Ambiguous code, blockquote, HTML, or source-map intent is recorded explicitly. A literal violation in an unresolved range makes that check incomplete instead of flagging source material or silently clearing the range.
 
-Verbatim evidence must come from the request or a trusted source record supplied by the caller. A Markdown wrapper alone is insufficient. The optional `--provenance` file contains records such as:
+Verbatim evidence must come from the request or a trusted source record supplied by the caller. The evaluator resolves explicit directives such as `Reproduce exactly: Keep—this.` and `Reproduce this sentence exactly: Keep—this.` at the start of the consumed request. It treats all text after the directive as the source and preserves its bytes. Copy, repeat, return, and quote directives with `exactly`, `verbatim`, or `unchanged` use the same form.
+
+Ambiguous reproduction intent or a source that does not match the reply makes the audit incomplete. The writer receives confirmed source records, and every revision retains the original protection baseline. A Markdown wrapper alone is insufficient. The optional `--provenance` file contains records such as:
 
 ```json
 [{"sourceId":"user-request:quote-1","text":"Exact supplied source text."}]

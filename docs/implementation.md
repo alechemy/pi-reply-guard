@@ -52,7 +52,7 @@ The installed declarations and implementation were inspected in addition to the 
 5. Pi's System One transport defaults to two retries. Explicit `maxRetries: 0` is necessary when the extension owns the request budget.
 6. Pi 1.4.0's System One answer parser discards the whole batch when one answer is malformed. Its returned model field also copies the requested model ID. The new adapter uses Pi's public fetch option to retain valid partial answers and check the served identity. Installed-SDK tests verify the hook, authentication forwarding, and retry suppression.
 7. Pi converts public `bool` questions to wire-level `noul` and converts `noul` answers to `probability`. Keep these contracts separate.
-8. Pi 1.4.0 clears `ctx.signal` before final settlement. Its private settlement abort flag is unavailable to extensions. Run isolated repair at `turn_end` while the active signal exists, then decide delivery at settlement. Aborted runs can skip settlement, so turn-boundary cleanup must also omit cancelled drafts.
+8. Pi 1.4.0 clears `ctx.signal` before final settlement. Its private settlement abort flag is unavailable until `agent_settled.aborted`. Run isolated repair at `turn_end` while the active signal exists. Prepare context edits at `agent_before_settle`, then validate the final cancellation state and committed projection before publication. Aborted runs can skip settlement, so turn-boundary cleanup must also omit cancelled drafts. Pending or withheld selections remain filtered from provider requests until an omission edit can be committed.
 
 The MIT license and upstream author attribution remain intact. The local `upstream` remote points to the original repository.
 
@@ -90,7 +90,7 @@ Off mode bypasses checking. Observe mode audits the original without rewriting o
 
 Unique draft markers prevent duplicate terminal delivery without hiding identical text in another reply. Native Pi rendering tests cover fresh and resumed sessions, narrow widths, strict withholding, and ordinary history with rendering disabled. Interrupted drafts remain recoverable and are excluded from subsequent model requests.
 
-Mode and policy commands cancel pending repair. Native SDK tests exposed the missing settlement abort signal, so isolated repair now runs at the active turn boundary. Abort during classification or repair produces no late release. The settings editor uses schema version 2, explicit legacy migration, and the existing private backup and concurrency protections.
+Mode and policy commands cancel pending repair while preserving the consumed request's rewrite count. Handled input and resumed extension feedback also retain that count. Request-derived exact-copy sources protect local auditing and every repair baseline. Ambiguous reproduction intent remains incomplete. Native SDK tests exposed the missing settlement abort signal, so isolated repair now runs at the active turn boundary. Abort during classification or repair produces no late release. The settings editor uses schema version 2, explicit legacy migration, and the existing private backup and concurrency protections.
 
 ## Remaining implementation
 
