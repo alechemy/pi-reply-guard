@@ -25,7 +25,7 @@ Source, ruleset, preprocessing, detector, and protection metadata are shared in 
 
 `inspectCatalog()` compares every numbered source rule and its location with the catalog. Added, removed, changed, or unmapped rules produce diagnostics. Policy changes before the numbered rules invalidate all mappings. Stale local checks are unavailable. Unaffected findings remain available alongside the incomplete catalog status.
 
-The schema rejects activation of uncalibrated semantic checks. [Promotion](calibration.md#review-and-promote) consumes an explicitly approved held-out record with qualifying per-check error counts and version bindings. Process requirements are recorded separately and are never reported as verified mental activity.
+The schema rejects activation of uncalibrated semantic checks in the catalog. The [experimental trial](experimental.md) applies an explicit runtime override for two named checks while retaining their uncalibrated evidence. [Promotion](calibration.md#review-and-promote) consumes an explicitly approved held-out record with qualifying per-check error counts and version bindings. Process requirements are recorded separately and are never reported as verified mental activity.
 
 ## Inspect and audit
 

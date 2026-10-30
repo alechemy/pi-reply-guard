@@ -2,7 +2,7 @@
 
 This branch contains the upstream regression fixes, the complete rule catalog, bounded per-rule evaluation, and the integrated preservation-checked repair engine. The catalog covers all 36 rules with 46 checks and 138 synthetic examples. [Rule catalog and Markdown checks](rules.md) documents source protection and local auditing. [Per-rule evaluation](evaluation.md) covers Jev execution and diagnostics. [Preservation and isolated repair](repair.md) covers acceptance checks, writer isolation, and canonical context.
 
-The package entry point now uses the new lifecycle with off, observe, and enforce modes, warning and strict policies, and recoverable withheld drafts. [Delivery and operating modes](delivery.md) covers terminal rendering and integration metadata. The fork is published and installed at `d3d3a31c8b5dfa5b5099758ad644f148064b57a8`. A live test exposed a served-model identity mismatch. The corrected source passes the authenticated smoke test. The installed revision is disabled pending publication of that correction. See [deployment verification](deployment.md).
+The package entry point now uses the new lifecycle with off, observe, and enforce modes, warning and strict policies, and recoverable withheld drafts. [Delivery and operating modes](delivery.md) covers terminal rendering and integration metadata. The managed installation pins `6dd3a189fc728bf0a0f21af2c065b6639e787c88` with enforce mode configured. That revision includes the live-tested served-model identity correction. See [deployment verification](deployment.md).
 
 ## Source baseline
 
@@ -102,8 +102,10 @@ Promotion consumes exact reviewed held-out evidence and checks sample counts, er
 
 The house semantic checks remain advisory. No held-out human corpus has been evaluated. The workflow prioritizes rules 9, 25, 34, and 35.
 
-## Remaining implementation
+## Experimental trial
 
-Publish the verified served-model identity correction, update the managed package pin, and reload Pi with enforce mode enabled. Fork publication, initial installation, configuration seeding, Stow links, and persistent off-mode rollback are complete. The supported host version is Pi 1.4.0.
+The [experimental trial](experimental.md) provides a default-off runtime opt-in for formulaic contrast and redundant negative clarification. It retains uncalibrated metadata, existing thresholds, preservation checks, rewrite budgets, and cancellation behavior. The catalog's promotion policy remains unchanged.
 
-Semantic calibration remains separate from deployment. The 44 semantic checks remain advisory until their reviewed held-out evidence meets the promotion policy.
+Native Pi tests cover opt-in commands, effective coverage, semantic-triggered repair, rejected meaning changes, stale definitions, and cancellation when the trial is disabled. Live development tests exposed missed violations and inconclusive preservation judgments. Those observations are recorded in the trial documentation.
+
+The supported host version is Pi 1.4.0. The trial commands require publication and installation of this change. Reviewed semantic promotion remains dependent on held-out calibration.

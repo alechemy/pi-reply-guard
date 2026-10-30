@@ -14,7 +14,7 @@ Warning policy releases the latest preserved candidate with the audit for that e
 
 Malformed, unsupported, or unreadable configuration cannot establish a trusted operating policy. The guard withholds the draft and directs the operator to `/reply-guard status`. A valid configuration with an unavailable catalog retains its selected policy and records an incomplete audit.
 
-An explicit mode or policy change cancels pending repair. The cancelled draft remains withheld. Run `/reply-guard recover` to inspect it. The command opens the latest withheld draft on the current branch without appending messages or changing canonical context.
+An explicit mode, policy, or experimental-selection change cancels pending repair. The cancelled draft remains withheld. Run `/reply-guard recover` to inspect it. The command opens the latest withheld draft on the current branch without appending messages or changing canonical context.
 
 ## Lifecycle
 
@@ -37,7 +37,7 @@ Markers identify individual drafts, so identical text in another unguarded reply
 
 Released text replaces the original assistant's content in canonical context. Pending and withheld candidates are filtered from model requests and audit conversation context. Strict withholding and turn-boundary cancellation append omission edits immediately. A late cancellation or conflicting edit can leave provisional text in Pi's committed projection until the next boundary appends an omission edit. The context filter excludes it from provider requests during that interval, including after resume. Raw original entries and their usage are retained. Removing the extension leaves ordinary assistant history readable, but removes its custom rendering and concealment.
 
-`showVerdicts: false` suppresses clean results. Known failures, advisory findings, and unavailable coverage remain visible. Expanded verdicts list individual checks. With `debug` enabled, expansion also shows structured candidate audits and writer usage. `/reply-guard verdict` opens the latest result metadata for inspection.
+`showVerdicts: false` suppresses clean results. Known failures, advisory findings, and unavailable coverage remain visible. Expanded verdicts list individual checks. Experimental checks retain a visible uncalibrated label, including when clean verdicts are otherwise hidden. With `debug` enabled, expansion also shows structured candidate audits and writer usage. `/reply-guard verdict` opens the latest result metadata for inspection.
 
 ## Integration metadata
 

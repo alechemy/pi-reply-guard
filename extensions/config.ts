@@ -2,6 +2,7 @@ import { randomUUID } from "node:crypto";
 import { lstatSync, mkdirSync, readFileSync, renameSync, rmdirSync, unlinkSync, writeFileSync } from "node:fs";
 import { dirname, isAbsolute, join } from "node:path";
 import { getAgentDir, type Skill } from "@earendil-works/pi-coding-agent";
+import { validateExperimentalChecks } from "../lib/experimental.mjs";
 
 export const NAME = "reply-guard";
 export const VERDICT = "reply-guard-verdict";
@@ -74,6 +75,7 @@ export interface Config {
 	schemaVersion: 2;
 	thresholdMeaning: "violation";
 	mode: "off" | "observe" | "enforce";
+	experimentalChecks: string[];
 	releasePolicy: "warning" | "strict";
 	skill: string;
 	skillPath?: string;
@@ -91,7 +93,7 @@ export interface Config {
 }
 
 export const DEFAULTS: Config = {
-	schemaVersion: 2, thresholdMeaning: "violation", mode: "enforce", releasePolicy: "warning", skill: "unslop",
+	schemaVersion: 2, thresholdMeaning: "violation", mode: "enforce", experimentalChecks: [], releasePolicy: "warning", skill: "unslop",
 	model: "openrouter/typesafe/jev-1.14", maxRewrites: 2, writerDeadlineMs: 60000,
 	auditDeadlineMs: 5000, classifierConcurrency: 2, maxClassifierRequests: 8, maxInputTokens: 64000,
 	preload: false, debug: false, showVerdicts: true,
@@ -104,6 +106,7 @@ export function parseConfig(text: string): Config {
 	if (value.schemaVersion !== 2) throw new Error("Unsupported schemaVersion. This reader supports version 2.");
 	if (["skills", "inject", "reinjectBelow"].some((key) => Object.hasOwn(value, key))) throw new Error("Legacy settings require explicit migration and belong under legacyCompliance.");
 	const config = { ...DEFAULTS, ...value };
+	config.experimentalChecks = validateExperimentalChecks(config.experimentalChecks);
 	if (config.thresholdMeaning !== "violation") throw new Error("Version 2 catalog thresholds measure violations.");
 	if (!["off", "observe", "enforce"].includes(config.mode)) throw new Error("Mode must be off, observe, or enforce.");
 	if (!["warning", "strict"].includes(config.releasePolicy)) throw new Error("Release policy must be warning or strict.");

@@ -1,8 +1,8 @@
 # pi-reply-guard
 
-This fork of [amalavet/pi-reply-guard](https://github.com/amalavet/pi-reply-guard) audits completed assistant reply prose and repairs active violations with an isolated, tool-free writer. The Unslop catalog maps all 36 rules to 46 checks. The two literal checks enforce immediately. The 44 semantic style checks remain advisory until calibrated.
+This fork of [amalavet/pi-reply-guard](https://github.com/amalavet/pi-reply-guard) audits completed assistant reply prose and repairs active violations with an isolated, tool-free writer. The Unslop catalog maps all 36 rules to 46 checks. The two literal checks enforce immediately. The 44 semantic style checks default to advisory. An [experimental opt-in](docs/experimental.md) lets formulaic contrast and redundant negative clarification trigger repairs before calibration.
 
-The package entry point now uses the per-rule evaluator and preservation-checked repair engine. It is tested against Pi 1.4.0. [Calibration tools](docs/calibration.md) provide corpus import, bounded evaluation, and reviewed per-rule promotion. The fork is published and installed. Live verification exposed a served-model identity mismatch. The corrected source passes authenticated auditing, repair, and cancellation checks. The installed revision remains disabled until that correction is published. See [deployment verification](docs/deployment.md) and [implementation status](docs/implementation.md).
+The package entry point now uses the per-rule evaluator and preservation-checked repair engine. It is tested against Pi 1.4.0. [Calibration tools](docs/calibration.md) provide corpus import, bounded evaluation, and reviewed per-rule promotion. The deployed `6dd3a18` revision includes the served-model identity correction and passes authenticated auditing, repair, and cancellation checks. See [deployment verification](docs/deployment.md) and [implementation status](docs/implementation.md).
 
 ## Commands
 
@@ -16,11 +16,13 @@ The package entry point now uses the per-rule evaluator and preservation-checked
 | `/reply-guard off` | Disables checking and repair for new replies. |
 | `/reply-guard observe` | Audits the original reply without rewriting or withholding it. |
 | `/reply-guard enforce` | Repairs active violations within the configured budget. |
+| `/reply-guard trial on` | Opts the two supported semantic checks into experimental enforcement. |
+| `/reply-guard trial off` | Removes the experimental opt-in. |
 | `/reply-guard warning` | Releases the latest preservation-approved candidate with its own verdict. |
 | `/reply-guard strict` | Withholds automatic delivery when required checks fail or remain incomplete. |
 | `/reply-guard migrate` | Converts legacy compliance settings after confirmation and creates a private backup. |
 
-Mode or release-policy changes cancel pending repair. Other settings apply to the next request. Recovery opens an inspection editor and leaves canonical conversation context unchanged.
+Mode, release-policy, or experimental-selection changes cancel pending repair. Other settings apply to the next request. Recovery opens an inspection editor and leaves canonical conversation context unchanged.
 
 ## Configuration
 
@@ -31,6 +33,7 @@ The configuration lives at `~/.pi/agent/reply-guard.json`, or under Pi's configu
   "schemaVersion": 2,
   "thresholdMeaning": "violation",
   "mode": "enforce",
+  "experimentalChecks": [],
   "releasePolicy": "warning",
   "skill": "unslop",
   "model": "openrouter/typesafe/jev-1.14",
@@ -75,6 +78,7 @@ Drafts are sent to the classifier and isolated writer. Raw session files, JSON e
 - [Preservation and isolated repair](docs/repair.md)
 - [Delivery and operating modes](docs/delivery.md)
 - [Corpus evaluation and semantic calibration](docs/calibration.md)
+- [Experimental semantic trial](docs/experimental.md)
 - [Implementation status and verification](docs/implementation.md)
 
 The upstream MIT license and author attribution are retained.

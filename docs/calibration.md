@@ -1,6 +1,6 @@
 # Calibration workflow
 
-The calibration commands import supplied writing, evaluate development or held-out samples, report per-check errors, and prepare reviewed semantic activations. The house catalog remains advisory until a check has qualifying evidence.
+The calibration commands import supplied writing, evaluate development or held-out samples, report per-check errors, and prepare reviewed semantic activations. The house catalog remains advisory until a check has qualifying evidence. The [experimental trial](experimental.md) provides a separate runtime opt-in for two checks. It preserves their uncalibrated status and leaves these promotion requirements unchanged.
 
 | Task | Procedure |
 | --- | --- |

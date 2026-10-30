@@ -2,6 +2,13 @@ import { parseSkill, PREPROCESSING_VERSION, DETECTOR_VERSION } from "../../lib/c
 
 export const skill = "# Fictional test policy\n\nPreserve meaning.\n\n## Patterns to detect and fix\n\n" + Array.from({ length: 36 }, (_, index) => `${index + 1}. **Rule ${index + 1}.** Fictional policy ${index + 1}.\n`).join("");
 
+export function makeTrialCatalog() {
+  const catalog = makeCatalog();
+  catalog.checks.find((check) => check.id === "fictional-9").id = "formulaic-contrast";
+  catalog.checks.find((check) => check.id === "fictional-35").id = "redundant-negative-clarification";
+  return catalog;
+}
+
 export function makeCatalog() {
   const checks = Array.from({ length: 36 }, (_, index) => ({
     id: `fictional-${index + 1}`, sourceRule: index + 1, kind: "semantic", scope: "reply",

@@ -3,6 +3,7 @@ import type { ExtensionAPI, ExtensionCommandContext, Skill } from "@earendil-wor
 import { coverageReport, loadCatalog } from "../lib/catalog.mjs";
 import { RESULT } from "../lib/delivery.mjs";
 import { createJevAdapter } from "../lib/jev.mjs";
+import { EXPERIMENTAL_CHECKS, withExperimentalChecks } from "../lib/experimental.mjs";
 import { CONFIG_PATH, DEFAULTS, NAME, loadConfig, migrateConfig, parseConfig, rulePaths, saveConfig, type Config } from "./config.js";
 
 import type { Delivery } from "./ui.js";
@@ -34,7 +35,7 @@ export function registerConfigCommand(pi: ExtensionAPI, controls: Controls) {
 						return;
 					}
 					const paths = rulePaths(config, skills);
-					const catalog = await loadCatalog(paths.catalogPath, paths.skillPath);
+					const catalog = withExperimentalChecks(await loadCatalog(paths.catalogPath, paths.skillPath), config.experimentalChecks);
 					const report = coverageReport(catalog);
 					if (ctx.hasUI) await ctx.ui.editor("Rule coverage and calibration (inspection only)", report);
 					else ctx.ui.notify(report, "info");
@@ -62,7 +63,18 @@ export function registerConfigCommand(pi: ExtensionAPI, controls: Controls) {
 				}
 				if (["off", "observe", "enforce"].includes(action)) { save({ ...config, mode: action as Config["mode"] }); return; }
 				if (["warning", "strict"].includes(action)) { save({ ...config, releasePolicy: action as Config["releasePolicy"] }); return; }
-				if (action) throw new Error("Use /reply-guard [status|coverage|verdict|recover|off|observe|enforce|warning|strict|migrate].");
+				if (action === "trial on" || action === "trial off") {
+					const next = { ...config, experimentalChecks: action === "trial on" ? [...EXPERIMENTAL_CHECKS] : [] };
+					if (next.experimentalChecks.length) {
+						const paths = rulePaths(next, controls.skills().length ? controls.skills() : ctx.getSystemPromptOptions().skills);
+						const catalog = withExperimentalChecks(await loadCatalog(paths.catalogPath, paths.skillPath), next.experimentalChecks);
+						if (!catalog.valid || next.experimentalChecks.some((id) => !catalog.checks.some((check) => check.id === id && check.status === "active" && !check.stale))) throw new Error("Trial definitions are stale or unavailable. Inspect /reply-guard coverage before enabling them.");
+					}
+					save(next);
+					ctx.ui.notify(next.experimentalChecks.length ? `Experimental semantic checks enabled. Accuracy is uncalibrated. Current mode: ${config.mode}. Disable with /reply-guard trial off.` : "Experimental semantic checks disabled.", "info");
+					return;
+				}
+				if (action) throw new Error("Use /reply-guard [status|coverage|verdict|recover|off|observe|enforce|warning|strict|migrate|trial on|trial off].");
 				if (!ctx.hasUI) throw new Error("The settings editor requires an interactive or RPC UI.");
 				while (true) {
 					const options = [`Mode: ${config.mode}`, `Release policy: ${config.releasePolicy}`, `Show verdicts: ${config.showVerdicts ? "on" : "off"}`, "Edit JSON", "Save settings", "Done"];

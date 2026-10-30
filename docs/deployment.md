@@ -1,10 +1,10 @@
 # Deployment verification
 
-Pi 1.4.0 is the verified host version. The fork is published at [alechemy/pi-reply-guard](https://github.com/alechemy/pi-reply-guard/tree/feat/unslop-audit). The managed installation initially pins `d3d3a31c8b5dfa5b5099758ad644f148064b57a8`.
+Pi 1.4.0 is the verified host version. The fork is published at [alechemy/pi-reply-guard](https://github.com/alechemy/pi-reply-guard/tree/feat/unslop-audit). The managed installation pins `6dd3a189fc728bf0a0f21af2c065b6639e787c88`.
 
 The first live check exposed an identity mismatch. OpenRouter accepts `typesafe/jev-1.14` and returns `typesafe/jev-1.14-20261014`. The adapter previously required the response to echo the requested ID. The corrected adapter binds audits, caches, and calibration records to the exact dated response identity. Other builds and aliases remain unavailable. The [System One response contract](https://docs.typesafe.ai/api/system-one) allows the served model name to differ from the request alias.
 
-The correction passes the live checks below and awaits publication. The installed revision is disabled with `mode: "off"` until its pin can be updated.
+The installed revision includes the correction and is configured for enforce mode with warning release.
 
 ## Live synthetic smoke test
 
@@ -30,6 +30,6 @@ Native Pi regression tests cover settlement, cancellation, context reconstructio
 
 Dotfiles owns the immutable Git package declaration and the Unslop skill/catalog files. Its setup script copies a configuration seed to `~/.pi/agent/reply-guard.json` only when absent. The live configuration is a private regular file. Repeating setup preserves mode changes, including disabling the guard.
 
-After the corrected revision is published and installed, run `/reload`, `/reply-guard enforce`, and `/reply-guard status` in Pi. Warning policy releases the latest preserved candidate with its audit. `/reply-guard off` disables checking and repair while retaining the configuration.
+After installation, run `/reload` and `/reply-guard status` in Pi. Use `/reply-guard enforce` if the guard was previously disabled. Warning policy releases the latest preserved candidate with its audit. `/reply-guard off` disables checking and repair while retaining the configuration.
 
 For full removal, remove the package from the managed settings fragment, merge settings, run `pi remove` with its exact package source, and reload Pi. Keep the live configuration and session files for recovery.

@@ -5,7 +5,7 @@ import { DRAFT, RESULT, hasMarker, textOf } from "../lib/delivery.mjs";
 import { NAME, SKILLS, VERDICT, type Config } from "./config.js";
 type LegacyCheck = { status?: string; termination?: string; reply?: string; hidden?: string[] };
 
-type AuditCheck = { id: string; disposition: string; outcome: string; incomplete?: boolean; reason?: string; reasons?: string[]; calibration?: { state: string } };
+type AuditCheck = { id: string; disposition: string; outcome: string; experimental?: boolean; incomplete?: boolean; reason?: string; reasons?: string[]; calibration?: { state: string } };
 export type Delivery = {
 	mode: Config["mode"]; releasePolicy: Config["releasePolicy"]; delivery: "released" | "withheld"; termination: string; showVerdicts?: boolean; reply?: string; draft?: string; draftId?: string;
 	debug?: boolean; candidates?: unknown[]; writerUsage?: unknown;
@@ -13,7 +13,8 @@ export type Delivery = {
 };
 const digest = (text: string) => createHash("sha256").update(text.trim()).digest("hex");
 const staleCalibrations = (data: Delivery) => data.audit?.checks.filter((check) => check.calibration?.state === "stale").length ?? 0;
-const quiet = (data: Delivery) => !staleCalibrations(data) && !data.audit?.catalogIssues?.length && data.showVerdicts === false && data.delivery === "released" && data.audit?.status === "passed" && !data.audit.incomplete && !data.audit.advisoryIncomplete && !data.audit.checks.some((check) => check.outcome === "violation");
+const experimentalCount = (data: Delivery) => data.audit?.checks.filter((check) => check.experimental).length ?? 0;
+const quiet = (data: Delivery) => !experimentalCount(data) && !staleCalibrations(data) && !data.audit?.catalogIssues?.length && data.showVerdicts === false && data.delivery === "released" && data.audit?.status === "passed" && !data.audit.incomplete && !data.audit.advisoryIncomplete && !data.audit.checks.some((check) => check.outcome === "violation");
 
 export function statusText(data: Delivery): string {
 	const audit = data.audit;
@@ -21,6 +22,7 @@ export function statusText(data: Delivery): string {
 	return [
 		`${data.mode}: active checks ${audit?.status ?? "unchecked"}${audit?.incomplete && audit.status !== "incomplete" ? ", incomplete" : ""}`,
 		`${advisory.length} advisory (${advisory.filter((check) => check.outcome === "violation").length} flagged, ${advisory.filter((check) => check.calibration?.state === "uncalibrated").length} uncalibrated)`,
+		...(experimentalCount(data) ? [`${experimentalCount(data)} experimental active (uncalibrated)`] : []),
 		...(audit?.advisoryIncomplete ? ["advisory coverage incomplete"] : []),
 		...(staleCalibrations(data) ? [`${staleCalibrations(data)} stale calibration`] : []),
 		...(audit?.catalogIssues?.length ? ["catalog stale or incomplete"] : []),
@@ -51,11 +53,11 @@ export function registerUI(pi: ExtensionAPI) {
 		const data = entry.data;
 		if (!data) return content;
 		if (!quiet(data)) {
-			const color = data.delivery === "released" && data.audit?.status === "passed" && !data.audit.advisoryIncomplete && !staleCalibrations(data) && !data.audit.catalogIssues?.length ? "muted" : "warning";
+			const color = data.delivery === "released" && data.audit?.status === "passed" && !data.audit.advisoryIncomplete && !experimentalCount(data) && !staleCalibrations(data) && !data.audit.catalogIssues?.length ? "muted" : "warning";
 			const lines = [`[${NAME}] ${statusText(data)}`];
 			if (data.audit?.error) lines.push(data.audit.error);
 			if (data.delivery === "withheld") lines.push("Inspect the stored draft with /reply-guard recover.");
-			if (expanded) for (const check of data.audit?.checks ?? []) lines.push(`${check.id}: ${check.disposition}, ${check.outcome}${check.incomplete ? ", incomplete" : ""}${check.reason ? `. ${check.reason}` : ""}${check.reasons?.length ? `. ${check.reasons.join(" ")}` : ""}`);
+			if (expanded) for (const check of data.audit?.checks ?? []) lines.push(`${check.id}: ${check.disposition}${check.experimental ? " (experimental)" : ""}, ${check.outcome}${check.incomplete ? ", incomplete" : ""}${check.reason ? `. ${check.reason}` : ""}${check.reasons?.length ? `. ${check.reasons.join(" ")}` : ""}`);
 			if (expanded && data.debug) lines.push(JSON.stringify({ candidates: data.candidates, writerUsage: data.writerUsage }, null, 2));
 			content.addChild(new Text(theme.fg(color, lines.join("\n")), 1, 0));
 		}
