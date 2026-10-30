@@ -2,7 +2,7 @@
 
 [![npm](https://img.shields.io/npm/v/pi-reply-guard)](https://www.npmjs.com/package/pi-reply-guard) [![Pi package](https://img.shields.io/badge/pi-package-blue)](https://pi.dev/packages/pi-reply-guard) [![Downloads](https://img.shields.io/npm/dm/pi-reply-guard)](https://www.npmjs.com/package/pi-reply-guard) [![Stars](https://img.shields.io/github/stars/amalavet/pi-reply-guard)](https://github.com/amalavet/pi-reply-guard/stargazers) [![License](https://img.shields.io/npm/l/pi-reply-guard)](LICENSE)
 
-This branch contains the first regression fixes for a maintained Unslop integration. Keep it uninstalled until the rule catalog, preservation checks, and text-only repair are complete. [Implementation status](docs/implementation.md) records the tested changes and remaining work.
+This branch contains regression fixes and an offline catalog covering all 36 Unslop rules. [Rule catalog and Markdown checks](docs/rules.md) documents source protection, local auditing, and semantic request planning. Keep the extension uninstalled until per-rule evaluation, preservation checks, and text-only repair are integrated. [Implementation status](docs/implementation.md) records the tested changes and remaining work.
 
 The current evaluator asks Jev whether each final reply complies with each configured skill. Its probability estimates the answer to that question. A low compliance probability requests a rewrite within the configured budget.
 

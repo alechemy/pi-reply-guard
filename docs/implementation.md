@@ -1,6 +1,8 @@
 # Implementation status
 
-This branch contains the first upstream regression fixes for the Unslop reply guard. Keep it uninstalled until preservation, text-only repair, and delivery-state handling are implemented. The current entry point still uses whole-skill compliance questions and main-agent continuations.
+This branch contains the upstream regression fixes and the offline rule-catalog phase of the Unslop reply guard. The catalog covers all 36 rules with 46 checks and 138 synthetic examples. Positioned Markdown parsing, protected-content comparisons, local checks, and semantic request planning are implemented. [Rule catalog and Markdown checks](rules.md) documents the files and commands.
+
+Keep the extension uninstalled until preservation, text-only repair, and delivery-state handling are implemented. The current Pi entry point still uses whole-skill compliance questions and main-agent continuations.
 
 ## Source baseline
 
@@ -69,11 +71,10 @@ These tests establish control flow. Jev's writing judgments and repair preservat
 
 Continue in this order:
 
-1. Implement the Markdown evaluation view, source-position protection map, and schema-validated catalog covering all 36 rules. Generate the coverage report from the catalog. Keep source rules in the Stow-managed Unslop directory and reusable code here.
-2. Replace whole-skill questions with narrow per-rule questions, full-response chunk coverage, structured evidence, and versioned cache keys. Start semantic style checks as advisory. Preserve active local findings when remote checks fail.
-3. Add mandatory semantic and literal preservation checks against the original draft. Add the isolated writer, its deadline and bounded attempts, and mock-tool isolation tests.
-4. Implement off, observe, and enforce modes, warning and strict release policies, explicit draft recovery, canonical fallback context, and resumed-session rendering.
-5. Add all-rule fixtures, separate preservation fixtures, corpus import, held-out evaluation, and reviewable promotion records. Prioritize semantic calibration for rules 9, 25, 34, and 35.
-6. Finish fork publication, immutable package registration, idempotent Stow integration, configuration migration, and rollback. Test the chosen authenticated Jev route with a bounded synthetic smoke test and record served versions, latency, and usage.
+1. Connect the completed catalog and Markdown view to per-rule evaluation. Replace whole-skill questions with narrow per-rule questions, full-response chunk coverage, structured evidence, and versioned cache keys. Start semantic style checks as advisory. Preserve active local findings when remote checks fail.
+2. Add mandatory semantic and literal preservation checks against the original draft. Add the isolated writer, its deadline and bounded attempts, and mock-tool isolation tests.
+3. Implement off, observe, and enforce modes, warning and strict release policies, explicit draft recovery, canonical fallback context, and resumed-session rendering.
+4. Extend the catalog's synthetic examples with a separate semantic-preservation fixture set, corpus import, held-out evaluation, and reviewable promotion records. Prioritize semantic calibration for rules 9, 25, 34, and 35.
+5. Finish fork publication, immutable package registration, idempotent Stow integration, configuration migration, and rollback. Test the chosen authenticated Jev route with a bounded synthetic smoke test and record served versions, latency, and usage.
 
 A final supported Pi range and an installed revision must be recorded after these stages pass. The current branch is a development checkpoint.

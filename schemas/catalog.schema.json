@@ -1,0 +1,100 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "Reply guard rule catalog",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schemaVersion", "rulesetVersion", "preprocessingVersion", "detectorVersion", "source", "protectionPolicy", "processRequirements", "checks"],
+  "properties": {
+    "schemaVersion": {"const": 1},
+    "rulesetVersion": {"type": "string", "minLength": 1},
+    "preprocessingVersion": {"type": "string", "minLength": 1},
+    "detectorVersion": {"type": "string", "minLength": 1},
+    "source": {
+      "type": "object", "additionalProperties": false,
+      "required": ["file", "digest", "policyDigest", "rules"],
+      "properties": {
+        "file": {"const": "SKILL.md"},
+        "digest": {"$ref": "#/definitions/digest"},
+        "policyDigest": {"$ref": "#/definitions/digest"},
+        "rules": {"type": "array", "minItems": 1, "items": {
+          "type": "object", "additionalProperties": false,
+          "required": ["number", "title", "startLine", "endLine", "digest"],
+          "properties": {
+            "number": {"type": "integer", "minimum": 1}, "title": {"type": "string", "minLength": 1},
+            "startLine": {"type": "integer", "minimum": 1}, "endLine": {"type": "integer", "minimum": 1},
+            "digest": {"$ref": "#/definitions/digest"}
+          }
+        }}
+      }
+    },
+    "protectionPolicy": {"type": "string", "minLength": 1},
+    "processRequirements": {"type": "array", "minItems": 1, "items": {
+      "type": "object", "additionalProperties": false,
+      "required": ["id", "requirement", "verification", "observableChecks"],
+      "properties": {
+        "id": {"type": "string", "minLength": 1}, "requirement": {"type": "string", "minLength": 1},
+        "verification": {"const": "internal-process-not-verifiable"},
+        "observableChecks": {"type": "array", "items": {"type": "string"}, "uniqueItems": true}
+      }
+    }},
+    "checks": {"type": "array", "minItems": 1, "items": {"$ref": "#/definitions/check"}}
+  },
+  "definitions": {
+    "digest": {"type": "string", "pattern": "^[a-f0-9]{64}$"},
+    "check": {
+      "type": "object", "additionalProperties": false,
+      "required": ["id", "sourceRule", "kind", "scope", "applicability", "exceptions", "repair", "status", "statusReason", "calibration", "examples"],
+      "properties": {
+        "id": {"type": "string", "pattern": "^[a-z][a-z0-9-]+$"},
+        "sourceRule": {"type": "integer", "minimum": 1},
+        "kind": {"enum": ["local", "semantic", "hybrid"]},
+        "scope": {"enum": ["passage", "reply", "conversation", "heading", "heading-or-list"]},
+        "applicability": {"type": "string", "minLength": 1},
+        "exceptions": {"type": "string", "minLength": 1},
+        "repair": {"type": "string", "minLength": 1},
+        "status": {"enum": ["active", "advisory"]},
+        "statusReason": {"type": "string", "minLength": 1},
+        "predicate": {
+          "type": "object", "additionalProperties": false, "required": ["id", "comparison", "codePoints"],
+          "properties": {
+            "id": {"enum": ["em-dash", "curly-quotes"]},
+            "comparison": {"const": "contains-in-eligible-prose"},
+            "codePoints": {"type": "array", "items": {"type": "integer"}}
+          },
+          "oneOf": [
+            {"properties": {"id": {"const": "em-dash"}, "codePoints": {"const": [8212]}}},
+            {"properties": {"id": {"const": "curly-quotes"}, "codePoints": {"const": [8216, 8217, 8218, 8219, 8220, 8221, 8222, 8223]}}}
+          ]
+        },
+        "question": {"type": "object", "additionalProperties": false, "required": ["type", "instructions", "criteria"], "properties": {
+          "type": {"const": "bool"}, "instructions": {"type": "string", "minLength": 1},
+          "criteria": {"type": "object", "additionalProperties": false, "required": ["true", "false"], "properties": {
+            "true": {"type": "string", "minLength": 1}, "false": {"type": "string", "minLength": 1}
+          }}
+        }},
+        "calibration": {"oneOf": [{"type": "null"}, {
+          "type": "object", "additionalProperties": false,
+          "required": ["state", "threshold", "model", "dataset", "priority"],
+          "properties": {
+            "state": {"const": "uncalibrated"}, "threshold": {"type": "number", "minimum": 0, "maximum": 1},
+            "model": {"type": "null"}, "dataset": {"type": "null"}, "priority": {"enum": ["normal", "high"]}
+          }
+        }]},
+        "examples": {"type": "array", "minItems": 3, "items": {
+          "type": "object", "additionalProperties": false,
+          "required": ["label", "request", "reply", "reason"],
+          "properties": {
+            "label": {"enum": ["violation", "clear", "exception"]},
+            "request": {"type": "string", "minLength": 1}, "reply": {"type": "string", "minLength": 1},
+            "reason": {"type": "string", "minLength": 1}
+          }
+        }}
+      },
+      "allOf": [{
+        "if": {"properties": {"kind": {"const": "local"}}},
+        "then": {"required": ["predicate"], "properties": {"predicate": {}, "question": false, "scope": {"const": "passage"}, "calibration": {"type": "null"}}},
+        "else": {"required": ["question"], "properties": {"question": {}, "predicate": false, "calibration": {"type": "object"}, "status": {"const": "advisory"}}}
+      }]
+    }
+  }
+}
