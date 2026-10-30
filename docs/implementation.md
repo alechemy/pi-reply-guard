@@ -1,8 +1,8 @@
 # Implementation status
 
-This branch contains the upstream regression fixes, the complete rule catalog, bounded per-rule evaluation, and the preservation-checked repair engine. The catalog covers all 36 rules with 46 checks and 138 synthetic examples. [Rule catalog and Markdown checks](rules.md) documents source protection and local auditing. [Per-rule evaluation](evaluation.md) covers Jev execution and diagnostics. [Preservation and isolated repair](repair.md) covers acceptance checks, writer isolation, and canonical context.
+This branch contains the upstream regression fixes, the complete rule catalog, bounded per-rule evaluation, and the integrated preservation-checked repair engine. The catalog covers all 36 rules with 46 checks and 138 synthetic examples. [Rule catalog and Markdown checks](rules.md) documents source protection and local auditing. [Per-rule evaluation](evaluation.md) covers Jev execution and diagnostics. [Preservation and isolated repair](repair.md) covers acceptance checks, writer isolation, and canonical context.
 
-Keep the extension uninstalled until operating modes and terminal delivery policies are integrated. The new repair lifecycle is tested against Pi 1.4.0 but is not yet registered by the package entry point, which still uses the legacy implementation.
+The package entry point now uses the new lifecycle with off, observe, and enforce modes, warning and strict policies, and recoverable withheld drafts. [Delivery and operating modes](delivery.md) covers terminal rendering and integration metadata. Managed installation and live Jev verification have not been performed.
 
 ## Source baseline
 
@@ -30,18 +30,18 @@ The existing Unslop loader supplies a request-local reminder and restores the fu
 - Separate failed checks, incomplete checking, termination, and delivery. Preserve known failures when another check is unavailable.
 - Stop repeated candidates and cycles using the exact candidate's cached result within the request.
 - Reject missing, malformed, nonfinite, out-of-range, and unexpected answers. Provider errors no longer look like successful checks.
-- Remove request and reply character cutoffs. Oversized inputs receive explicit incomplete results until chunked evaluation is implemented.
+- Remove request and reply character cutoffs. Passage checks use overlapping chunks. Oversized full-context checks receive explicit incomplete results.
 - Bound audit time, concurrent requests, total requests, and conservatively estimated input. Disable native transport retries so they cannot exceed the extension's request budget.
 - Discard awaited results after input, shutdown, or branch navigation. Abort the in-flight classifier request on those events.
 - Preserve configuration errors as visible incomplete results. Missing or empty required skills cannot silently disable checking.
-- Save versioned configuration atomically with private backups, an editor lock, and a check for intervening edits. Reading legacy configuration does not write it. Saving migrates it without changing compliance threshold semantics, its selected model, or its preload preference.
+- Save version 2 configuration atomically with private backups, an editor lock, and a check for intervening edits. Explicit migration retains legacy compliance thresholds, the selected model, preload preference, budgets, and unrelated settings.
 - Keep failures visible when successful verdict display is disabled. New debug traces omit raw drafts, tool payloads, and provider payloads.
 
-Schema version 1 explicitly retains upstream compliance probabilities. Its settings are an intermediate migration format. Per-rule violation probabilities require a separate schema and explicit migration.
+Schema version 2 uses catalog-owned violation thresholds. `/reply-guard migrate` requires confirmation and stores old thresholds under `legacyCompliance` with their original meaning. A multi-skill legacy configuration remains unchanged pending an explicit catalog mapping decision.
 
-The legacy terminal renderer conceals drafts using display transformations. Drafts remain in raw session history, provider context, JSON events, RPC streams, and exports. Strict release policies and rendering for the new preservation-checked fallback are pending.
+The terminal renderer conceals enforced drafts and displays the chosen reply once. Raw session files, JSON/RPC streams, exports, and recovery metadata retain draft text. Future main-agent context uses the released text or an omission edit for withheld drafts.
 
-## Pi API constraints for the next stage
+## Pi API constraints
 
 The installed declarations and implementation were inspected in addition to the documentation.
 
@@ -52,6 +52,7 @@ The installed declarations and implementation were inspected in addition to the 
 5. Pi's System One transport defaults to two retries. Explicit `maxRetries: 0` is necessary when the extension owns the request budget.
 6. Pi 1.4.0's System One answer parser discards the whole batch when one answer is malformed. Its returned model field also copies the requested model ID. The new adapter uses Pi's public fetch option to retain valid partial answers and check the served identity. Installed-SDK tests verify the hook, authentication forwarding, and retry suppression.
 7. Pi converts public `bool` questions to wire-level `noul` and converts `noul` answers to `probability`. Keep these contracts separate.
+8. Pi 1.4.0 clears `ctx.signal` before final settlement. Its private settlement abort flag is unavailable to extensions. Run isolated repair at `turn_end` while the active signal exists, then decide delivery at settlement. Aborted runs can skip settlement, so turn-boundary cleanup must also omit cancelled drafts.
 
 The MIT license and upstream author attribution remain intact. The local `upstream` remote points to the original repository.
 
@@ -63,7 +64,7 @@ Run against the installed Homebrew Pi package:
 PI_PACKAGE_ROOT="$(brew --prefix pi-coding-agent)/libexec/lib/node_modules/@earendil-works/pi-coding-agent" npm test
 ```
 
-Tests block network access, use a disposable HOME, and provide deterministic classifiers and writers. `test/regressions.mjs` exercises the loaded extension's handlers. `test/sdk.mjs` runs real Pi settlement and continuation with a fake writer provider. The initial tests reproduced skipped final audits and false-success error handling before the fixes.
+Tests block network access, use a disposable HOME, and provide deterministic classifiers and writers. `test/regressions.mjs` exercises the loaded extension's configuration and cancellation paths through the SDK. `test/sdk.mjs` runs real Pi settlement, context reconstruction, and native message rendering with synthetic writer and classifier responses. The initial tests reproduced skipped final audits and false-success error handling before the fixes.
 
 These tests establish control flow. Jev's writing judgments and repair preservation remain uncalibrated. Live calls belong after the offline guard and installation are complete.
 
@@ -81,14 +82,21 @@ Revisions now require literal preservation and nine semantic preservation condit
 
 The isolated writer uses the selected model and applicable generation settings. Registered mock tools remain unexecuted across direct, deferred, and codemode tool-call attempts. Writer failures and cancellation stop without an internal agent continuation.
 
-`registerRepairLifecycle()` implements the Pi event integration. `repairBoundary()` persists the selected reply through a context edit while retaining the raw original and its usage. Installed-SDK tests verify the accepted text on the next turn and after resume. The package entry point will adopt this lifecycle when delivery policies and rendering are ready.
+`registerRepairLifecycle()` implements the Pi event integration and is registered by the package entry point. `repairBoundary()` persists the selected reply through a context edit while retaining the raw original and its usage. Installed-SDK tests verify the accepted text on the next turn and after resume.
+
+## Delivery checkpoint
+
+Off mode bypasses checking. Observe mode audits the original without rewriting or withholding it. Enforce mode performs bounded isolated repair and applies warning or strict release. Advisory coverage is reported separately from active acceptance checks.
+
+Unique draft markers prevent duplicate terminal delivery without hiding identical text in another reply. Native Pi rendering tests cover fresh and resumed sessions, narrow widths, strict withholding, and ordinary history with rendering disabled. Interrupted drafts remain recoverable and are excluded from subsequent model requests.
+
+Mode and policy commands cancel pending repair. Native SDK tests exposed the missing settlement abort signal, so isolated repair now runs at the active turn boundary. Abort during classification or repair produces no late release. The settings editor uses schema version 2, explicit legacy migration, and the existing private backup and concurrency protections.
 
 ## Remaining implementation
 
 Continue in this order:
 
-1. Implement off, observe, and enforce modes, warning and strict release policies, explicit draft recovery, and resumed-session rendering. Replace the package entry point's legacy lifecycle with `registerRepairLifecycle()` and a versioned configuration loader.
-2. Add corpus import, held-out evaluation, and reviewable promotion records. The synthetic preservation fixtures are implemented. Prioritize semantic style calibration for rules 9, 25, 34, and 35, and evaluate preservation separately.
-3. Finish fork publication, immutable package registration, idempotent Stow integration, configuration migration, and rollback. Test the chosen authenticated Jev route with a bounded synthetic smoke test and record served versions, latency, and usage.
+1. Add corpus import, held-out evaluation, and reviewable promotion records. The synthetic preservation fixtures are implemented. Prioritize semantic style calibration for rules 9, 25, 34, and 35, and evaluate preservation separately.
+2. Finish fork publication, immutable package registration, idempotent Stow integration, deployment configuration, and rollback. Test the chosen authenticated Jev route with a bounded synthetic smoke test and record served versions, latency, and usage.
 
 A final supported Pi range and an installed revision must be recorded after these stages pass. The current branch is a development checkpoint.

@@ -217,13 +217,15 @@ test("later settlement boundaries cannot replenish a request's repair budget", a
     const message = { role: "assistant", stopReason: "stop", content: [{ type: "text", text }] };
     await emit("message_start", { message });
     await emit("message_end", { message });
-    const boundary = await emit("agent_before_settle", { entries: [], outcome: "completed", continue: false, context: { contextEntries: [{ sourceEntry: { id: text }, messages: [message] }] } });
+    const event = { entries: [], outcome: "completed", continue: false, context: { contextEntries: [{ sourceEntry: { id: text }, messages: [message] }] } };
+    await emit("turn_end", event);
+    const boundary = await emit("agent_before_settle", event);
     assert.equal(boundary.entries.at(-1).data.requestRewrites, 1);
     assert.equal(writes, 1);
   }
 });
 
-test("lifecycle invalidation prevents late settlement after input or navigation", async () => {
+test("lifecycle invalidation prevents late repair delivery after input or navigation", async () => {
   for (const cancelEvent of ["input", "session_shutdown", "session_tree", "session_before_switch", "session_before_fork"]) {
     const handlers = new Map();
     const pi = { on: (event, handler) => { handlers.set(event, [...(handlers.get(event) ?? []), handler]); } };
@@ -244,7 +246,7 @@ test("lifecycle invalidation prevents late settlement after input or navigation"
     await emit("message_start", { message: { role: "user" } });
     await emit("message_end", { message });
     const event = { entries: [], outcome: "completed", continue: false, context: { contextEntries: [{ sourceEntry: { id: "entry" }, messages: [message] }] } };
-    const pending = emit("agent_before_settle", event);
+    const pending = emit("turn_end", event);
     await started;
     await emit(cancelEvent);
     assert.equal(await pending, undefined);

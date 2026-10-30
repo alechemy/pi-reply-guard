@@ -1,98 +1,86 @@
 import { readFileSync } from "node:fs";
-import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
-import { CONFIG_PATH, DEFAULTS, NAME, parseConfig, saveConfig } from "./config.js";
+import type { ExtensionAPI, ExtensionCommandContext, Skill } from "@earendil-works/pi-coding-agent";
+import { coverageReport, loadCatalog } from "../lib/catalog.mjs";
+import { RESULT } from "../lib/delivery.mjs";
+import { createJevAdapter } from "../lib/jev.mjs";
+import { CONFIG_PATH, DEFAULTS, NAME, loadConfig, migrateConfig, parseConfig, rulePaths, saveConfig, type Config } from "./config.js";
 
-export function registerConfigCommand(pi: ExtensionAPI) {
+import type { Delivery } from "./ui.js";
+
+type Controls = { skills: () => Skill[]; changed: (config: Config, previous: Config | undefined, ctx: ExtensionCommandContext) => void };
+
+export function registerConfigCommand(pi: ExtensionAPI, controls: Controls) {
 	pi.registerCommand(NAME, {
-		description: "Edit reply guard skills, thresholds, model, and display settings",
-		handler: async (_args, ctx) => {
-			if (!ctx.hasUI) return;
-			let original: string | undefined;
-			let config;
+		description: "Configure modes and release policy, inspect coverage and verdicts, or recover a withheld draft",
+		handler: async (args, ctx) => {
+			const action = args.trim();
 			try {
-				original = readFileSync(CONFIG_PATH, "utf8");
-				config = parseConfig(original);
-			} catch (error) {
-				if ((error as NodeJS.ErrnoException).code === "ENOENT") config = { ...DEFAULTS, skills: {} };
-				else {
-					ctx.ui.notify(`Cannot load ${CONFIG_PATH}. Repair the file before editing settings. Existing bytes were preserved.`, "error");
+				if (action === "recover" || action === "verdict") {
+					const results = ctx.sessionManager.getBranch().flatMap((entry) => entry.type === "custom" && entry.customType === RESULT ? [entry.data as Delivery] : []);
+					const result = action === "recover" ? results.findLast((data) => data?.delivery === "withheld" && typeof data.draft === "string") : results.at(-1);
+					if (!result) { ctx.ui.notify(action === "recover" ? "No withheld draft is stored on this branch." : "No verdict is stored on this branch.", "info"); return; }
+					if (!ctx.hasUI) { ctx.ui.notify("Draft and verdict inspection requires an interactive or RPC UI.", "error"); return; }
+					const { draft, reply: _reply, ...metadata } = result;
+					await ctx.ui.editor(action === "recover" ? "Withheld draft (inspection only)" : "Recent verdict (inspection only)", action === "recover" ? draft : JSON.stringify(metadata, null, 2));
 					return;
 				}
-			}
-			while (true) {
-				const options = [
-					`Skills and thresholds (${Object.keys(config.skills).length})`,
-					`Classifier model: ${config.model}`,
-					`Maximum rewrites: ${config.maxRewrites}`,
-					`Show verdicts: ${config.showVerdicts ? "on" : "off"}`,
-					`Inject skill text: ${config.inject ? "on" : "off"}`,
-					`Reinject skill text below: ${config.reinjectBelow}`,
-					`Preload skills: ${config.preload ? "on" : "off"}`,
-					`Debug: ${config.debug ? "on" : "off"}`,
-					"Edit JSON",
-					"Done",
-				];
-				const selected = await ctx.ui.select("Reply guard settings", options);
-				if (selected === undefined || selected === "Done") return;
-				const next = { ...config, skills: { ...config.skills } };
-				try {
-					switch (options.indexOf(selected)) {
-						case 0: {
-							const names = Object.keys(config.skills);
-							const items = names.map((name) => `${name}: ${config.skills[name]}`);
-							const skill = await ctx.ui.select("Skills and thresholds", [...items, "Add skill"]);
-							if (skill === undefined) continue;
-							const name = skill === "Add skill"
-								? (await ctx.ui.input("Installed skill name"))?.trim()
-								: names[items.indexOf(skill)];
-							if (!name) continue;
-							const threshold = await ctx.ui.input(
-								`Threshold for ${name} (0–1, leave blank to disable)`,
-								String(config.skills[name] ?? 0.5),
-							);
-							if (threshold === undefined) continue;
-							if (threshold.trim() === "") delete next.skills[name];
-							else next.skills[name] = Number(threshold);
-							break;
-						}
-						case 1: {
-							const model = await ctx.ui.input("Classifier model (provider/id)", config.model);
-							if (model === undefined) continue;
-							next.model = model.trim();
-							break;
-						}
-						case 2: {
-							const count = await ctx.ui.input("Maximum rewrites", String(config.maxRewrites));
-							if (count === undefined) continue;
-							next.maxRewrites = count.trim() === "" ? NaN : Number(count);
-							break;
-						}
-						case 3: next.showVerdicts = !config.showVerdicts; break;
-						case 4: next.inject = !config.inject; break;
-						case 5: {
-							const value = await ctx.ui.input("Reinject skill text when probability is below (0–1, 0 to disable)", String(config.reinjectBelow));
-							if (value === undefined) continue;
-							next.reinjectBelow = value.trim() === "" ? NaN : Number(value);
-							break;
-						}
-						case 6: next.preload = !config.preload; break;
-						case 7: next.debug = !config.debug; break;
-						case 8: {
-							const text = await ctx.ui.editor("Reply guard configuration", JSON.stringify(config, null, 2));
-							if (text === undefined) continue;
-							Object.assign(next, parseConfig(text));
-							break;
-						}
+				if (action === "status" || action === "coverage") {
+					const config = loadConfig();
+					const skills = controls.skills().length ? controls.skills() : ctx.getSystemPromptOptions().skills;
+					if (action === "status") {
+						let sources;
+						try { sources = rulePaths(config, skills); } catch { sources = { sourceError: "The configured skill could not be found." }; }
+						ctx.ui.notify(JSON.stringify({ configuration: CONFIG_PATH, ...Object.fromEntries(Object.keys(DEFAULTS).map((key) => [key, config[key as keyof Config]])), ...sources, classifierAvailable: createJevAdapter(ctx.modelRegistry, config.model).available }, null, 2), "info");
+						return;
 					}
+					const paths = rulePaths(config, skills);
+					const catalog = await loadCatalog(paths.catalogPath, paths.skillPath);
+					const report = coverageReport(catalog);
+					if (ctx.hasUI) await ctx.ui.editor("Rule coverage and calibration (inspection only)", report);
+					else ctx.ui.notify(report, "info");
+					return;
+				}
+				let original: string | undefined;
+				try { original = readFileSync(CONFIG_PATH, "utf8"); } catch (error) { if ((error as NodeJS.ErrnoException).code !== "ENOENT") throw error; }
+				if (action === "migrate") {
+					if (original === undefined) throw new Error("No legacy configuration exists. Use /reply-guard to create settings.");
+					const next = migrateConfig(original);
+					if (!ctx.hasUI || !(await ctx.ui.confirm("Migrate reply guard settings?", "The catalog will own per-rule violation thresholds. Old compliance thresholds and injection preferences will be retained under legacyCompliance. The selected model, preload preference, budgets, and unrelated settings will be preserved."))) return;
+					const backup = saveConfig(next, original);
+					controls.changed(next, undefined, ctx);
+					ctx.ui.notify(`Migrated settings. Previous settings: ${backup}. Verify the catalog and pinned model with /reply-guard status and /reply-guard coverage.`, "info");
+					return;
+				}
+				let config = original === undefined ? { ...DEFAULTS } : parseConfig(original);
+				function save(next: Config) {
 					const validated = parseConfig(JSON.stringify(next));
 					const backup = saveConfig(validated, original);
-					original = `${JSON.stringify(validated, null, 2)}\n`;
+					controls.changed(validated, config, ctx);
 					config = validated;
-					ctx.ui.notify(`Reply guard settings saved for the next request.${backup ? ` Previous settings: ${backup}` : ""}`, "info");
-				} catch (error) {
-					ctx.ui.notify(error instanceof Error ? error.message : String(error), "error");
+					original = `${JSON.stringify(validated, null, 2)}\n`;
+					ctx.ui.notify(`Reply guard settings saved.${backup ? ` Previous settings: ${backup}` : ""}`, "info");
 				}
-			}
+				if (["off", "observe", "enforce"].includes(action)) { save({ ...config, mode: action as Config["mode"] }); return; }
+				if (["warning", "strict"].includes(action)) { save({ ...config, releasePolicy: action as Config["releasePolicy"] }); return; }
+				if (action) throw new Error("Use /reply-guard [status|coverage|verdict|recover|off|observe|enforce|warning|strict|migrate].");
+				if (!ctx.hasUI) throw new Error("The settings editor requires an interactive or RPC UI.");
+				while (true) {
+					const options = [`Mode: ${config.mode}`, `Release policy: ${config.releasePolicy}`, `Show verdicts: ${config.showVerdicts ? "on" : "off"}`, "Edit JSON", "Save settings", "Done"];
+					const selected = await ctx.ui.select("Reply guard settings", options);
+					if (selected === undefined || selected === "Done") return;
+					if (selected === "Edit JSON") {
+						const text = await ctx.ui.editor("Reply guard configuration", JSON.stringify(config, null, 2));
+						if (text !== undefined) save(parseConfig(text));
+					} else if (selected === options[0]) {
+						const mode = await ctx.ui.select("Operating mode", ["off", "observe", "enforce"]);
+						if (mode) save({ ...config, mode: mode as Config["mode"] });
+					} else if (selected === options[1]) {
+						const policy = await ctx.ui.select("Release policy in enforce mode", ["warning", "strict"]);
+						if (policy) save({ ...config, releasePolicy: policy as Config["releasePolicy"] });
+					} else if (selected === options[2]) save({ ...config, showVerdicts: !config.showVerdicts });
+					else if (selected === "Save settings") save(config);
+				}
+			} catch (error) { ctx.ui.notify(error instanceof Error ? error.message : "Reply guard settings could not be loaded.", "error"); }
 		},
 	});
 }

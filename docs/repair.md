@@ -1,8 +1,8 @@
 # Preservation and isolated repair
 
-The repair engine audits each revision against the original draft and selects the latest candidate that passes preservation checks. Its Pi lifecycle adapter audits at `message_end`, repairs at `agent_before_settle`, and persists the selected text through a context edit.
+The repair engine audits each revision against the original draft and selects the latest candidate that passes preservation checks. Its Pi lifecycle adapter audits at `message_end`, repairs at `turn_end`, and persists the selected text through a context edit at `agent_before_settle`.
 
-The lifecycle adapter is tested against Pi 1.4.0. The package entry point still uses the legacy implementation. Switching it requires the next delivery-policy and terminal-rendering phase. Keep the extension uninstalled until that work is complete.
+The package entry point uses this lifecycle on Pi 1.4.0. [Delivery and operating modes](delivery.md) documents warning and strict policies, terminal suppression, and draft recovery.
 
 ## Required preservation checks
 
@@ -50,15 +50,17 @@ Each reserved generation records its usage separately. Missing usage remains unk
 
 ## Lifecycle and canonical context
 
-`registerRepairLifecycle(pi, loadSnapshot)` accepts a caller-supplied loader for the validated catalog, pinned classifier adapter, limits, generation preferences, rewrite cap, and trusted provenance. The new package configuration flow will supply that loader.
+`registerRepairLifecycle(pi, loadSnapshot, presentation)` accepts a loader for the validated catalog, pinned classifier adapter, limits, generation preferences, rewrite cap, and trusted provenance. The package configuration flow supplies that loader. The optional presentation adapter handles draft markers and status rendering.
 
 The lifecycle adapter snapshots those inputs for the request. It invalidates pending work on input, shutdown, branch navigation, session switching, and forking. It also checks session identity and cancellation after awaited operations. A genuine consumed user message starts a new request scope.
 
-At settlement, the adapter preserves other extensions' entries and continuation decisions. It defers repair when another extension requests continuation and refuses to overwrite a competing edit to the original entry.
+The adapter preserves other extensions' boundary entries and continuation decisions. It defers repair when an earlier handler requests continuation. A competing content edit supersedes the audited draft and causes withholding.
+
+Pi 1.4.0 exposes the active operation signal during `turn_end` but clears it before `agent_before_settle`. Isolated repair therefore runs at the turn boundary. Settlement performs the delivery decision without awaiting model work. Turn-boundary cleanup also omits cancelled drafts when an abort skips final settlement.
 
 `repairBoundary()` binds the selected text to its candidate hash and matching audit, then appends a context edit against the original assistant entry. The raw draft and its usage remain intact. Rejected revisions and internal editing instructions are never appended as conversational messages. Separate custom metadata records candidate hashes, audits, preservation decisions, termination, and writer usage.
 
-Installed-SDK tests verify canonical text on the next user turn and after reopening the saved session. Terminal suppression, strict withholding, draft recovery, and operating-mode commands belong to the next integration phase.
+Installed-SDK tests verify canonical text on the next user turn and after reopening the saved session. Package-entry tests also cover native terminal rendering, strict withholding, recovery, operating modes, and aborting both classification and isolated repair.
 
 ## Verification
 

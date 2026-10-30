@@ -1,301 +1,229 @@
 import assert from "node:assert/strict";
-import { mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, statSync, writeFileSync } from "node:fs";
-import { tmpdir } from "node:os";
-import { dirname, join, resolve } from "node:path";
-import { fileURLToPath, pathToFileURL } from "node:url";
+import { readFileSync, readdirSync, rmSync, statSync, writeFileSync } from "node:fs";
+import { join } from "node:path";
 import test from "node:test";
+import { setup, home, agentDir, configPath, sdk, original, good, answer, assistantText } from "./fixtures/extension.mjs";
+import { skill } from "./fixtures/catalog.mjs";
 
-const root = resolve(dirname(fileURLToPath(import.meta.url)), "..");
-const piRoot = process.env.PI_PACKAGE_ROOT;
-assert.ok(piRoot, "Set PI_PACKAGE_ROOT to the installed Pi package directory");
-const home = mkdtempSync(join(tmpdir(), "reply-guard-test-"));
-const agentDir = join(home, ".pi/agent");
-process.env.HOME = home;
-process.env.PI_CODING_AGENT_DIR = agentDir;
-process.env.PI_OFFLINE = "1";
-process.env.PI_TELEMETRY = "0";
-mkdirSync(agentDir, { recursive: true });
-globalThis.fetch = () => { throw new Error("Network forbidden in regression tests"); };
-const { loadExtensions } = await import(pathToFileURL(join(piRoot, "dist/core/extensions/loader.js")));
-const skill = { name: "fixture", filePath: join(home, "SKILL.md"), description: "Fictional writing rule", source: "user", baseDir: home, disableModelInvocation: false };
-writeFileSync(skill.filePath, "# Fictional rule\n\nUse clear prose.\n");
-const response = (probability) => ({
-  provider: "openrouter", model: "typesafe/jev-1.14", stopReason: "stop",
-  answers: { meets: { type: "bool", probability } },
-});
-const message = (text) => ({ role: "assistant", stopReason: "stop", content: [{ type: "text", text }] });
+const pause = () => new Promise((resolve) => setImmediate(resolve));
+const until = async (condition) => { for (let i = 0; i < 200 && !condition(); i++) await pause(); assert.ok(condition(), "Fixture did not reach the expected stage"); };
 
-async function fixture({ config = {}, answers = [response(1)], skills = [skill] } = {}) {
-  const configPath = join(agentDir, "reply-guard.json");
-  writeFileSync(configPath, typeof config === "string" ? config : JSON.stringify({
-    skills: { fixture: 0.9 }, preload: false, model: "openrouter/typesafe/jev-1.14", ...config,
-  }));
-  const { extensions, errors } = await loadExtensions([join(root, "extensions/reply-guard.ts")], home);
-  assert.deepEqual(errors, []);
-  const extension = extensions[0];
-  const calls = [];
-  const callOptions = [];
-  const statuses = [];
-  const notices = [];
-  const controller = new AbortController();
-  const ctx = {
-    signal: controller.signal, hasUI: false,
-    ui: { notify: (...args) => notices.push(args), setStatus: (...args) => statuses.push(args) },
-    sessionManager: { getBranch: () => [], buildSessionProjection: () => ({ messages: [{ role: "user", content: "Write a fictional reply." }] }) },
-    modelRegistry: {
-      getModelOfType: () => ({ id: "typesafe/jev-1.14", provider: "openrouter" }),
-      classify: async (_model, body, options) => {
-        calls.push(body);
-        callOptions.push(options);
-        const answer = answers[Math.min(calls.length - 1, answers.length - 1)];
-        if (typeof answer === "function") return answer();
-        return answer;
-      },
-    },
-  };
-  async function emit(name, event = {}) {
-    let result;
-    for (const handler of extension.handlers.get(name) ?? []) {
-      const value = await handler({ type: name, ...event }, ctx);
-      if (value !== undefined) result = value;
-    }
-    return result;
-  }
-  await emit("before_agent_start", { messageType: "user", prompt: "Write a fictional reply.", systemPromptOptions: { skills } });
-  await emit("message_start", { message: { role: "user" } });
-  async function candidate(text, entries = []) {
-    const value = message(text);
-    await emit("message_start", { message: value });
-    const ended = await emit("message_end", { message: value });
-    const boundary = await emit("agent_before_settle", { entries, outcome: "completed", continue: false, context: { canContinue: false } });
-    return { ended, boundary, verdict: boundary?.entries.findLast((entry) => entry.customType === "reply-guard-verdict")?.data };
-  }
-  return { calls, callOptions, statuses, notices, candidate, emit, ctx, controller, configPath, extension };
-}
-
-test("reply guard upstream regressions", async (t) => {
+test("loaded extension failure, cancellation, and configuration regressions", async (t) => {
   t.after(() => rmSync(home, { recursive: true, force: true }));
-  for (const [title, maxRewrites, probabilities, expectedCalls, termination] of [
-    ["original passes", 2, [1], 1, "passed"],
-    ["first repair passes", 2, [0, 1], 2, "passed"],
-    ["last permitted repair passes", 2, [0, 0, 1], 3, "passed"],
-    ["all candidates fail", 2, [0, 0, 0], 3, "rewrite-limit"],
-    ["zero budget audits once", 0, [0], 1, "rewrite-limit"],
-  ]) {
-    await t.test(title, async () => {
-      const f = await fixture({ config: { maxRewrites }, answers: probabilities.map(response) });
-      let result;
-      let repairs = 0;
-      do {
-        result = await f.candidate(`Fictional candidate ${repairs}.`);
-        if (result.boundary?.continue) repairs++;
-        assert.ok(repairs <= maxRewrites, "Repair count exceeded the configured cap");
-      } while (result.boundary?.continue);
-      assert.equal(f.calls.length, expectedCalls);
-      assert.equal(result.verdict.termination, termination);
-      assert.equal(result.verdict.reply, `Fictional candidate ${repairs}.`);
-      assert.equal(result.verdict.status, termination === "passed" ? "passed" : "failed");
-    });
-  }
-  for (const [title, answer] of [
-    ["returned credential error", { stopReason: "error", answers: {}, errorMessage: "Synthetic credential rejection" }],
-    ["missing answer", { stopReason: "stop", answers: {} }],
-    ["wrong answer type", { stopReason: "stop", answers: { meets: { type: "noul", noul: 1 } } }],
-    ["NaN probability", response(NaN)],
-    ["out of range probability", response(2)],
-    ["thrown error", () => { throw new Error("Synthetic transport failure"); }],
-  ]) {
-    await t.test(title, async () => {
-      const f = await fixture({ answers: [answer] });
-      const { verdict, boundary } = await f.candidate("Original.");
-      assert.equal(verdict.status, "incomplete");
-      assert.equal(verdict.termination, "checker-unavailable");
-      assert.notEqual(boundary.continue, true);
-      assert.equal(verdict.reply, "Original.");
-      assert.ok(verdict.verdicts[0].error);
-    });
-  }
-  await t.test("unavailable model remains incomplete", async () => {
-    const f = await fixture();
-    f.ctx.modelRegistry.getModelOfType = () => undefined;
-    const { verdict } = await f.candidate("Original.");
-    assert.equal(verdict.status, "incomplete");
-    assert.equal(verdict.termination, "checker-unavailable");
-    assert.equal(f.calls.length, 0);
-  });
-  for (const [title, options] of [
-    ["invalid configuration", { config: "{bad json" }],
-    ["missing selected skill", { skills: [] }],
-    ["unreadable selected skill", { skills: [{ ...skill, filePath: join(home, "missing.md") }] }],
-    ["no selected skills", { config: { skills: {} } }],
-  ]) {
-    await t.test(title, async () => {
-      const f = await fixture(options);
-      const before = readFileSync(f.configPath, "utf8");
-      const { verdict } = await f.candidate("Original.");
-      assert.equal(verdict.status, "incomplete");
-      assert.equal(verdict.termination, "configuration-error");
-      assert.equal(verdict.reply, "Original.");
-      assert.equal(readFileSync(f.configPath, "utf8"), before);
+  for (const [name, options, strict] of [
+    ["malformed configuration", { configText: "{bad json" }, true],
+    ["missing selected skill", { missingSkill: true }, false],
+    ["unreadable skill", { config: { skillPath: join(home, "missing.md") } }, false],
+    ["missing catalog under strict policy", { config: { catalogPath: join(home, "missing.json"), releasePolicy: "strict" } }, true],
+    ["invalid configuration enum", { config: { mode: "invalid" } }, true],
+    ["invalid audit budget", { config: { auditDeadlineMs: 0 } }, true],
+    ["invalid concurrency", { config: { classifierConcurrency: 1.5 } }, true],
+    ["invalid writer deadline", { config: { writerDeadlineMs: 0 } }, true],
+    ["legacy thresholds cannot be relabeled as version 2", { config: { skills: { fixture: 0.7 } } }, true],
+  ]) await t.test(name, async () => {
+    const f = await setup({ ...options, replies: [] });
+    const bytes = readFileSync(configPath, "utf8");
+    try {
+      await f.session.prompt("Give the instruction.");
+      assert.deepEqual(f.errors, []);
+      const data = f.results()[0].data;
+      assert.equal(data.audit.status, "incomplete");
+      assert.equal(data.termination, "configuration-error");
+      assert.equal(data.delivery, strict ? "withheld" : "released");
+      assert.equal(data.reply, strict ? undefined : original);
       assert.equal(f.calls.length, 0);
-    });
-  }
-  await t.test("boundary entries survive and a false initial canContinue permits feedback", async () => {
-    const f = await fixture({ answers: [response(0)] });
-    const other = { type: "custom", customType: "other-extension", data: { keep: true } };
-    const { boundary } = await f.candidate("Original.", [other]);
-    assert.deepEqual(boundary.entries[0], other);
-    assert.equal(boundary.continue, true);
+      assert.equal(readFileSync(configPath, "utf8"), bytes);
+    } finally { f.session.dispose(); }
   });
-  await t.test("request exceptions and response endings are not truncated", async () => {
-    const f = await fixture();
-    const request = "a".repeat(4500) + " Reproduce the quoted text exactly.";
-    const reply = "b".repeat(17000) + " Ending.";
-    f.ctx.sessionManager.buildSessionProjection = () => ({ messages: [{ role: "user", content: request }] });
-    await f.candidate(reply);
-    assert.equal(f.calls[0].state.request, request);
-    assert.equal(f.calls[0].state.reply, reply);
+  await t.test("stale catalog cannot pass strict checks", async () => {
+    const f = await setup({ text: good, replies: [], config: { releasePolicy: "strict" }, skillText: skill + "\nChanged policy.\n" });
+    try {
+      await f.session.prompt("Give the instruction.");
+      assert.deepEqual(f.errors, []);
+      assert.equal(f.results()[0].data.audit.incomplete, true);
+      assert.equal(f.results()[0].data.delivery, "withheld");
+      assert.match(f.render(), /catalog stale or incomplete/);
+    } finally { f.session.dispose(); }
   });
-  for (const texts of [["A.", "A."], ["A.", "B.", "A."]]) {
-    await t.test(`cycle ${texts.join(" ")}`, async () => {
-      const f = await fixture({ config: { maxRewrites: 5 }, answers: [response(0)] });
-      let result;
-      for (const text of texts) result = await f.candidate(text);
-      assert.equal(result.verdict.termination, "repeated-candidate");
-      assert.equal(result.verdict.reply, "A.");
-      assert.notEqual(result.boundary.continue, true);
-      assert.equal(f.calls.length, texts.length - 1);
-    });
-  }
-  await t.test("low-level agent starts do not replenish the rewrite budget", async () => {
-    const f = await fixture({ config: { maxRewrites: 1 }, answers: [response(0)] });
-    await f.candidate("A.");
-    await f.emit("agent_start");
-    assert.equal((await f.candidate("B.")).verdict.termination, "rewrite-limit");
-    await f.emit("message_start", { message: { role: "user" } });
-    assert.equal((await f.candidate("C.")).boundary.continue, true);
+  for (const [name, classify] of [
+    ["bad credentials", () => new Response(JSON.stringify({ error: "PRIVATE-PAYLOAD" }), { status: 401 })],
+    ["missing answer", (body) => { const value = answer(body); delete value.answers[Object.keys(value.answers)[0]]; return value; }],
+    ["malformed answer", (body) => { const value = answer(body); value.answers[Object.keys(value.answers)[0]] = { type: "bool", probability: 0 }; return value; }],
+    ["nonfinite answer", (body) => { const value = answer(body); value.answers[Object.keys(value.answers)[0]].noul = NaN; return value; }],
+    ["out-of-range answer", (body) => { const value = answer(body); value.answers[Object.keys(value.answers)[0]].noul = 2; return value; }],
+    ["unexpected answer", (body) => ({ ...answer(body), answers: { ...answer(body).answers, unknown: { type: "noul", noul: 0 } } })],
+  ]) await t.test(name, async () => {
+    const f = await setup({ classify, replies: [], config: { maxRewrites: 0 } });
+    try {
+      await f.session.prompt("Give the instruction.");
+      assert.deepEqual(f.errors, []);
+      const data = f.results()[0].data;
+      assert.equal(data.audit.status, "failed");
+      assert.equal(data.audit.advisoryIncomplete, true);
+      assert.ok(data.audit.checks.some((check) => check.id === "em-dash" && check.outcome === "violation"));
+      assert.equal(data.reply, original);
+      assert.doesNotMatch(JSON.stringify(data), /PRIVATE-PAYLOAD/);
+    } finally { f.session.dispose(); }
   });
-  await t.test("every text block is audited and whitespace is retained", async () => {
-    const f = await fixture();
-    await f.emit("message_end", { message: { ...message(""), content: [{ type: "text", text: "  First. " }, { type: "thinking", thinking: "Not prose." }, { type: "text", text: "Last.\n" }] } });
-    const result = await f.emit("agent_before_settle", { entries: [], outcome: "completed" });
-    assert.equal(f.calls[0].state.reply, "  First. \nLast.\n");
-    assert.equal(result.entries[0].data.reply, "  First. \nLast.\n");
+  await t.test("an audit deadline bounds a classifier that ignores cancellation", async () => {
+    const f = await setup({ classify: () => new Promise(() => {}), replies: [], config: { auditDeadlineMs: 20, maxRewrites: 0 } });
+    try {
+      const start = performance.now();
+      await f.session.prompt("Give the instruction.");
+      assert.deepEqual(f.errors, []);
+      assert.ok(performance.now() - start < 1000);
+      assert.equal(f.results()[0].data.audit.advisoryIncomplete, true);
+    } finally { f.session.dispose(); }
   });
-  for (const reason of ["aborted", "length", "error", "toolUse"]) {
-    await t.test(`incomplete generation ${reason} is not audited`, async () => {
-      const f = await fixture();
-      await f.emit("message_end", { message: { ...message("Partial."), stopReason: reason } });
+  await t.test("input budgets remain visible without classifier requests", async () => {
+    const f = await setup({ replies: [], config: { maxInputTokens: 1, maxRewrites: 0 } });
+    try {
+      await f.session.prompt("Give the instruction.");
       assert.equal(f.calls.length, 0);
-    });
-  }
-  await t.test("deadline bounds a provider that ignores cancellation", async () => {
-    const f = await fixture({ config: { auditDeadlineMs: 20 }, answers: [() => new Promise(() => {})] });
-    const started = performance.now();
-    const { verdict } = await f.candidate("Original.");
-    assert.equal(verdict.status, "incomplete");
-    assert.ok(performance.now() - started < 500);
-    assert.equal(f.calls.length, 1);
-    assert.equal(f.callOptions[0].maxRetries, 0);
-    assert.equal(f.callOptions[0].signal.aborted, true);
+      assert.equal(f.results()[0].data.audit.advisoryIncomplete, true);
+      assert.equal(f.results()[0].data.reply, original);
+    } finally { f.session.dispose(); }
   });
-  for (const event of ["input", "session_shutdown", "session_tree"]) {
-    await t.test(`${event} discards an awaited result`, async () => {
-      let finish;
-      const f = await fixture({ answers: [() => new Promise((resolve) => { finish = resolve; })] });
-      const pending = f.emit("message_end", { message: message("Obsolete.") });
-      await f.emit(event);
-      finish(response(0));
-      assert.equal(await pending, undefined);
-      assert.equal(await f.emit("agent_before_settle", { entries: [], outcome: "completed" }), undefined);
-    });
-  }
-  await t.test("partial failure retains a known violation", async () => {
-    const f = await fixture({
-      config: { skills: { fixture: 0.9, second: 0.9 }, maxRewrites: 0 },
-      skills: [skill, { ...skill, name: "second" }],
-      answers: [response(0), { stopReason: "error", answers: {} }],
-    });
-    const { verdict } = await f.candidate("Original.");
-    assert.equal(verdict.status, "failed");
-    assert.equal(verdict.incomplete, true);
-    assert.deepEqual(verdict.verdicts.map((v) => v.outcome), ["violation", "unavailable"]);
+  for (const mode of ["off", "observe", "abort"]) await t.test(`${mode} cancels an isolated repair`, async () => {
+    let release;
+    let signal;
+    const f = await setup({ config: { writerDeadlineMs: 1000 }, replies: [(options) => { signal = options.signal; return new Promise((resolve) => { release = resolve; }); }] });
+    try {
+      const pending = f.session.prompt("Give the instruction.");
+      await until(() => release !== undefined);
+      const started = performance.now();
+      if (mode === "abort") await f.session.abort();
+      else await f.command(mode);
+      await pending;
+      assert.ok(performance.now() - started < 500);
+      assert.equal(signal.aborted, true);
+      assert.deepEqual(f.errors, []);
+      assert.equal(f.results().at(-1).data.delivery, "withheld");
+      assert.equal(f.results().at(-1).data.termination, mode === "abort" ? "cancelled" : "mode-changed");
+      assert.equal(f.results().at(-1).data.rewrites, 1);
+      if (mode !== "abort") assert.equal(f.statuses.at(-1)[1], `Mode: ${mode}`);
+      assert.doesNotMatch(f.render(), /Retain the log/);
+      assert.deepEqual(assistantText(f.sessionManager.buildSessionProjection().messages), []);
+      release(good);
+      await pause();
+      assert.equal(f.results().filter((entry) => entry.data.reply).length, 0);
+      await f.session.prompt("Write the next reply.");
+      assert.deepEqual(assistantText(f.requests[1].messages), []);
+      assert.equal(f.writes(), 1);
+    } finally { f.session.dispose(); }
   });
-  await t.test("request and concurrency budgets hold", async () => {
-    const skills = Array.from({ length: 6 }, (_, index) => ({ ...skill, name: `skill${index}` }));
-    const f = await fixture({ config: { skills: Object.fromEntries(skills.map((s) => [s.name, 0.9])), classifierConcurrency: 2, maxClassifierRequests: 3 }, skills });
-    let active = 0;
-    let peak = 0;
-    let requests = 0;
-    f.ctx.modelRegistry.classify = async () => {
-      requests++;
-      active++;
-      peak = Math.max(peak, active);
-      await new Promise((resolve) => setTimeout(resolve, 5));
-      active--;
-      return response(1);
-    };
-    const { verdict } = await f.candidate("Original.");
-    assert.equal(requests, 3);
-    assert.equal(peak, 2);
-    assert.equal(verdict.status, "incomplete");
-    assert.equal(verdict.verdicts.filter((v) => v.outcome === "unavailable").length, 3);
+  await t.test("aborted classification stays concealed and recoverable after resume", async () => {
+    let release;
+    const f = await setup({ replies: [], classify: (body) => new Promise((resolve) => { release = () => resolve(answer(body)); }) });
+    const pending = f.session.prompt("Give the instruction.");
+    await until(() => release !== undefined);
+    await f.session.abort();
+    await pending;
+    release();
+    await pause();
+    assert.deepEqual(f.errors, []);
+    assert.equal(f.results().at(-1).data.delivery, "withheld");
+    assert.doesNotMatch(f.render(), /Retain the log/);
+    assert.deepEqual(assistantText(f.sessionManager.buildSessionProjection().messages), []);
+    const file = f.sessionManager.getSessionFile();
+    f.session.dispose();
+    const resumed = await setup({ priorManager: sdk.SessionManager.open(file), replies: [] });
+    try {
+      assert.doesNotMatch(resumed.render(), /Retain the log/);
+      await resumed.command("recover");
+      assert.deepEqual(resumed.editors.at(-1), ["Withheld draft (inspection only)", original]);
+    } finally { resumed.session.dispose(); }
   });
-  await t.test("oversize exact input is marked incomplete without sending a prefix", async () => {
-    const f = await fixture();
-    const { verdict } = await f.candidate("Long prose. ".repeat(10000));
-    assert.equal(verdict.status, "incomplete");
-    assert.equal(f.calls.length, 0);
-    assert.match(verdict.verdicts[0].error, /per-question limit/);
+  await t.test("an interrupted draft is concealed on startup and excluded from the next request", async () => {
+    const manager = sdk.SessionManager.create(home, join(home, "sessions"));
+    const marker = "\n\n<!--reply-guard:fictional-marker-->";
+    manager.appendMessage({ role: "user", content: "Give the instruction.", timestamp: Date.now() });
+    manager.appendCustomEntry("reply-guard-draft", { id: "interrupted", markers: [marker], text: original, mode: "enforce", releasePolicy: "warning" });
+    manager.appendMessage({ role: "assistant", content: [{ type: "text", text: original + marker }], stopReason: "stop", provider: "fixture", api: "fixture", model: "fixture", timestamp: Date.now(), usage: { input: 1, output: 1, cacheRead: 0, cacheWrite: 0, totalTokens: 2, cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, total: 0 } } });
+    const f = await setup({ priorManager: manager, replies: [] });
+    try {
+      assert.equal(f.results()[0].data.termination, "interrupted");
+      assert.equal(f.results()[0].data.rewrites, null);
+      assert.equal(f.results()[0].data.writerUsage, null);
+      assert.doesNotMatch(f.render(), /Retain the log/);
+      await f.session.prompt("Write the next reply.");
+      assert.deepEqual(f.errors, []);
+      assert.deepEqual(assistantText(f.requests[0].messages), []);
+      assert.deepEqual(assistantText(f.sessionManager.buildSessionProjection().messages), ["Follow-up reply."]);
+    } finally { f.session.dispose(); }
   });
-  await t.test("legacy settings migrate on save with compliance thresholds and a private backup", async () => {
+  await t.test("mid-cycle file edits do not change the captured policy, catalog, or cap", async () => {
+    const f = await setup({ replies: [() => {
+      writeFileSync(configPath, JSON.stringify({ schemaVersion: 2, skill: "fixture", mode: "off", maxRewrites: 0 }));
+      writeFileSync(join(home, "reply-guard.rules.json"), "{invalid");
+      return good;
+    }] });
+    try {
+      await f.session.prompt("Give the instruction.");
+      assert.deepEqual(f.errors, []);
+      assert.equal(f.results()[0].data.mode, "enforce");
+      assert.equal(f.results()[0].data.reply, good);
+      const calls = f.calls.length;
+      await f.session.prompt("Write the next reply.");
+      assert.equal(f.calls.length, calls);
+      assert.equal(f.results().length, 1);
+    } finally { f.session.dispose(); }
+  });
+  await t.test("legacy migration is explicit and preserves threshold meaning and preferences", async () => {
     const legacy = JSON.stringify({ skills: { fixture: 0.7 }, maxRewrites: 2, unrelated: { keep: true } });
-    const f = await fixture({ config: legacy });
-    const before = new Set(readdirSync(agentDir));
-    let selections = 0;
-    f.ctx.hasUI = true;
-    f.ctx.ui.select = async () => selections++ === 0 ? "Show verdicts: on" : "Done";
-    await f.extension.commands.get("reply-guard").handler("", f.ctx);
-    const saved = JSON.parse(readFileSync(f.configPath, "utf8"));
-    assert.equal(saved.schemaVersion, 1);
-    assert.equal(saved.thresholdMeaning, "compliance");
-    assert.equal(saved.skills.fixture, 0.7);
-    assert.equal(saved.model, "openrouter/typesafe/jev-1.13");
-    assert.equal(saved.preload, true);
-    assert.deepEqual(saved.unrelated, { keep: true });
-    const backups = readdirSync(agentDir).filter((name) => !before.has(name) && name.endsWith(".bak"));
-    assert.equal(backups.length, 1);
-    const backup = join(agentDir, backups[0]);
-    assert.equal(readFileSync(backup, "utf8"), legacy);
-    assert.equal(statSync(backup).mode & 0o777, 0o600);
-    assert.equal(statSync(f.configPath).mode & 0o777, 0o600);
+    const f = await setup({ configText: legacy, replies: [] });
+    try {
+      await f.session.prompt("Give the instruction.");
+      assert.equal(readFileSync(configPath, "utf8"), legacy);
+      assert.equal(f.results()[0].data.delivery, "withheld");
+      const before = new Set(readdirSync(agentDir));
+      await f.command("migrate");
+      const saved = JSON.parse(readFileSync(configPath, "utf8"));
+      assert.equal(saved.schemaVersion, 2);
+      assert.equal(saved.thresholdMeaning, "violation");
+      assert.deepEqual(saved.legacyCompliance.skills, { fixture: 0.7 });
+      assert.equal(saved.legacyCompliance.thresholdMeaning, "compliance");
+      assert.equal(saved.skills, undefined);
+      assert.equal(saved.model, "openrouter/typesafe/jev-1.13");
+      assert.equal(saved.preload, true);
+      assert.deepEqual(saved.unrelated, { keep: true });
+      const backups = readdirSync(agentDir).filter((name) => !before.has(name) && name.endsWith(".bak"));
+      assert.equal(backups.length, 1);
+      assert.equal(readFileSync(join(agentDir, backups[0]), "utf8"), legacy);
+      assert.equal(statSync(join(agentDir, backups[0])).mode & 0o777, 0o600);
+      assert.equal(statSync(configPath).mode & 0o777, 0o600);
+    } finally { f.session.dispose(); }
+  });
+  await t.test("migration preserves unsupported multi-skill settings for an explicit mapping decision", async () => {
+    const legacy = JSON.stringify({ skills: { fixture: 0.7, other: 0.8 } });
+    const f = await setup({ configText: legacy, replies: [] });
+    try {
+      await f.session.prompt("Give the instruction.");
+      await f.command("migrate");
+      assert.equal(readFileSync(configPath, "utf8"), legacy);
+      assert.ok(f.notices.some(([text]) => text.includes("one catalog-backed skill")));
+    } finally { f.session.dispose(); }
   });
   await t.test("configuration editor preserves concurrent changes", async () => {
-    const f = await fixture();
-    const replacement = JSON.stringify({ skills: { fixture: 0.5 } });
-    let selections = 0;
-    f.ctx.hasUI = true;
-    f.ctx.ui.select = async () => {
-      if (selections++ !== 0) return "Done";
-      writeFileSync(f.configPath, replacement);
-      return "Show verdicts: on";
-    };
-    await f.extension.commands.get("reply-guard").handler("", f.ctx);
-    assert.equal(readFileSync(f.configPath, "utf8"), replacement);
-    assert.ok(f.notices.some(([text]) => text.includes("Configuration changed")));
+    const f = await setup({ replies: [], config: { maxRewrites: 0 } });
+    try {
+      await f.session.prompt("Give the instruction.");
+      const replacement = JSON.stringify({ schemaVersion: 2, skill: "fixture", mode: "observe" });
+      f.ui.select = async () => { writeFileSync(configPath, replacement); return "Show verdicts: on"; };
+      await f.command("");
+      assert.equal(readFileSync(configPath, "utf8"), replacement);
+      assert.ok(f.notices.some(([text]) => text.includes("Configuration changed")));
+    } finally { f.session.dispose(); }
   });
-  for (const config of [{ schemaVersion: 2 }, { thresholdMeaning: "violation" }, { auditDeadlineMs: 0 }, { classifierConcurrency: 1.5 }, { maxClassifierRequests: -1 }]) {
-    await t.test(`invalid setting ${Object.keys(config)[0]} fails explicitly`, async () => {
-      const f = await fixture({ config });
-      const { verdict } = await f.candidate("Original.");
-      assert.equal(verdict.termination, "configuration-error");
-      assert.equal(f.calls.length, 0);
-    });
-  }
-  await t.test("input budget prevents transport", async () => {
-    const f = await fixture({ config: { maxInputTokens: 1 } });
-    const { verdict } = await f.candidate("Original.");
-    assert.equal(verdict.status, "incomplete");
-    assert.equal(f.calls.length, 0);
+  await t.test("coverage and verdict commands inspect without changing session context", async () => {
+    const f = await setup({ text: good, replies: [] });
+    try {
+      await f.session.prompt("Give the instruction.");
+      const before = f.sessionManager.getBranch().length;
+      for (const command of ["status", "coverage", "verdict"]) await f.command(command);
+      assert.equal(f.sessionManager.getBranch().length, before);
+      assert.ok(f.editors.some(([title, text]) => title.includes("coverage") && text.includes("36")));
+      assert.ok(f.editors.some(([title, text]) => title.includes("verdict") && JSON.parse(text).reply === undefined && JSON.parse(text).draft === undefined));
+    } finally { f.session.dispose(); }
   });
 });

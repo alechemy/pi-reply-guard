@@ -1,104 +1,113 @@
 import assert from "node:assert/strict";
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
-import { tmpdir } from "node:os";
-import { dirname, join, resolve } from "node:path";
-import { fileURLToPath, pathToFileURL } from "node:url";
+import { rmSync } from "node:fs";
 import test from "node:test";
+import { setup, home, sdk, original, good, bad, assistantText } from "./fixtures/extension.mjs";
 
-const piRoot = process.env.PI_PACKAGE_ROOT;
-assert.ok(piRoot, "Set PI_PACKAGE_ROOT to the installed Pi package directory");
-const root = resolve(dirname(fileURLToPath(import.meta.url)), "..");
-const home = mkdtempSync(join(tmpdir(), "reply-guard-sdk-"));
-const agentDir = join(home, ".pi/agent");
-const path = process.env.PATH;
-const testContext = process.env.NODE_TEST_CONTEXT;
-for (const key of Object.keys(process.env)) delete process.env[key];
-Object.assign(process.env, { HOME: home, PATH: path, PI_CODING_AGENT_DIR: agentDir, PI_OFFLINE: "1", PI_TELEMETRY: "0" });
-if (testContext) process.env.NODE_TEST_CONTEXT = testContext;
-globalThis.fetch = () => { throw new Error("Network forbidden in SDK tests"); };
-const sdk = await import(pathToFileURL(join(piRoot, "dist/index.js")));
-const ai = await import(pathToFileURL(join(piRoot, "node_modules/@earendil-works/pi-ai/dist/index.js")));
-const model = {
-  id: "fixture", name: "Fixture", provider: "reply-guard-fixture", api: "reply-guard-fixture", baseUrl: "http://127.0.0.1:1",
-  input: ["text"], reasoning: false, contextWindow: 200000, maxTokens: 4096,
-  cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 },
-};
-const usage = { input: 1, output: 1, cacheRead: 0, cacheWrite: 0, totalTokens: 2, cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, total: 0 } };
+const occurrences = (text, phrase) => text.split(phrase).length - 1;
 
-async function create(maxRewrites, probabilities) {
-  mkdirSync(agentDir, { recursive: true });
-  const skillPath = join(home, "SKILL.md");
-  writeFileSync(skillPath, "# Fictional rule\nUse clear prose.\n");
-  writeFileSync(join(agentDir, "reply-guard.json"), JSON.stringify({ skills: { fixture: 0.9 }, maxRewrites, preload: false }));
-  let writes = 0;
-  const audits = [];
-  const errors = [];
-  const settingsManager = sdk.SettingsManager.inMemory({ compaction: { enabled: false }, retry: { enabled: false } });
-  const resourceLoader = new sdk.DefaultResourceLoader({
-    cwd: home, agentDir, settingsManager, noSkills: true, noPromptTemplates: true, noThemes: true, noContextFiles: true,
-    additionalExtensionPaths: [join(root, "extensions/reply-guard.ts")],
-    skillsOverride: () => ({ skills: [{ name: "fixture", description: "Fictional rule", filePath: skillPath, baseDir: home, source: "user", disableModelInvocation: false }], diagnostics: [] }),
-    extensionFactories: [(pi) => {
-      pi.registerProvider(model.provider, {
-        api: model.api, baseUrl: model.baseUrl, apiKey: "fictional-test-key", models: [model],
-        streamSimple() {
-          writes++;
-          assert.ok(writes <= maxRewrites + 1, "Unbounded writer loop");
-          const stream = new ai.AssistantMessageEventStream();
-          stream.push({ type: "done", reason: "stop", message: {
-            role: "assistant", content: [{ type: "text", text: `Candidate ${writes}.` }], stopReason: "stop",
-            api: model.api, provider: model.provider, model: model.id, timestamp: Date.now(), usage,
-          } });
-          return stream;
-        },
-      });
-      pi.on("before_agent_start", (_event, ctx) => {
-        ctx.modelRegistry.getModelOfType = () => ({ id: "fixture", provider: "fixture" });
-        ctx.modelRegistry.classify = async (_model, body) => {
-          audits.push(body.state.reply);
-          const probability = probabilities[audits.length - 1];
-          assert.notEqual(probability, undefined, "Unexpected audit");
-          return { provider: "fixture", model: "fixture", stopReason: "stop", answers: { meets: { type: "bool", probability } } };
-        };
-      });
-      pi.on("agent_before_settle", (event) => ({ entries: [...event.entries, { type: "custom", customType: "other-extension", data: { retained: true } }] }));
-    }],
-  });
-  await resourceLoader.reload();
-  assert.deepEqual(resourceLoader.getExtensions().errors, []);
-  const modelRuntime = await sdk.ModelRuntime.create({ authPath: join(home, "auth.json"), modelsPath: join(home, "models.json") });
-  const sessionManager = sdk.SessionManager.inMemory(home);
-  const { session } = await sdk.createAgentSession({ cwd: home, agentDir, resourceLoader, settingsManager, modelRuntime, model, thinkingLevel: "off", sessionManager, tools: [] });
-  await session.bindExtensions({ onError: (error) => errors.push(error) });
-  return { session, sessionManager, audits, errors, writes: () => writes };
-}
-
-test("installed Pi SDK settlement integration", async (t) => {
+test("package entry point, delivery policies, and native Pi rendering", async (t) => {
   t.after(() => rmSync(home, { recursive: true, force: true }));
-  for (const [title, cap, probabilities, termination] of [
-    ["original success", 2, [1], "passed"],
-    ["final permitted repair success", 2, [0, 0, 1], "passed"],
-    ["rewrite exhaustion", 2, [0, 0, 0], "rewrite-limit"],
-    ["zero cap", 0, [0], "rewrite-limit"],
-  ]) {
-    await t.test(title, async () => {
-      const f = await create(cap, probabilities);
-      try {
-        await f.session.prompt("Write a fictional response.");
-        assert.deepEqual(f.errors, []);
-        assert.equal(f.writes(), probabilities.length);
-        assert.equal(f.audits.length, probabilities.length);
-        const entries = f.sessionManager.getBranch();
-        const results = entries.filter((entry) => entry.type === "custom" && entry.customType === "reply-guard-verdict");
-        assert.equal(results.length, probabilities.length);
-        assert.equal(results.at(-1).data.termination, termination);
-        assert.equal(results.at(-1).data.delivery, "released");
-        assert.equal(results.at(-1).data.reply, `Candidate ${probabilities.length}.`);
-        assert.equal(results.filter((entry) => entry.data.reply !== undefined).length, 1);
-        assert.equal(entries.filter((entry) => entry.customType === "other-extension").length, probabilities.length);
-      } finally {
-        f.session.dispose();
-      }
-    });
-  }
+  for (const [name, text, replies, cap, expected, termination] of [
+    ["original passes", good, [], 2, good, "passed"],
+    ["first repair passes", original, [good], 2, good, "passed"],
+    ["last permitted repair passes", original, ["Keep the log—for 2 hours.", good], 2, good, "passed"],
+    ["exhaustion selects the preserved fallback", original, ["Keep the log—for 2 hours.", bad], 2, "Keep the log—for 2 hours.", "rewrite-limit"],
+    ["all candidates fail", original, ["Keep the log—for 2 hours.", "Save the log—for 2 hours."], 2, "Save the log—for 2 hours.", "rewrite-limit"],
+    ["zero cap", original, [], 0, original, "rewrite-limit"],
+    ["identical candidate", original, [original], 2, original, "repeated-candidate"],
+    ["cycle", original, ["Keep the log—for 2 hours.", original], 2, original, "repeated-candidate"],
+    ["tool attempt", original, ["TOOL"], 2, original, "writer-tool-call"],
+    ["writer failure", original, ["ERROR"], 2, original, "writer-error"],
+    ["empty writer", original, [""], 2, original, "writer-empty"],
+  ]) await t.test(name, async () => {
+    const f = await setup({ text, replies, config: { maxRewrites: cap } });
+    try {
+      await f.session.prompt("Give the instruction.");
+      assert.deepEqual(f.errors, []);
+      assert.equal(f.writes(), replies.length);
+      assert.equal(f.toolCalls(), 0);
+      assert.equal(f.requests.length, 1);
+      assert.equal(f.results().length, 1);
+      const data = f.results()[0].data;
+      assert.equal(data.delivery, "released");
+      assert.equal(data.termination, termination);
+      assert.equal(data.reply, expected);
+      assert.equal(data.audit.candidateHash, data.selectedId);
+      assert.equal(data.rewrites, replies.length);
+      assert.equal(data.candidates.length, termination === "repeated-candidate" ? replies.length : replies.some((reply) => ["TOOL", "ERROR", ""].includes(reply)) ? 1 : replies.length + 1);
+      assert.equal(occurrences(f.render(), expected), 1);
+      assert.match(f.render(), /active checks/);
+      assert.match(f.render(), /advisory/);
+      assert.deepEqual(assistantText(f.sessionManager.buildSessionProjection().messages), [expected]);
+      assert.ok(f.sessionManager.getBranch().some((entry) => entry.customType === "other-extension"));
+      await f.session.prompt("Refer to your instruction.");
+      assert.deepEqual(assistantText(f.requests[1].messages), [expected]);
+    } finally { f.session.dispose(); }
+  });
+  for (const mode of ["off", "observe"]) await t.test(`${mode} preserves the original without repair`, async () => {
+    const f = await setup({ config: { mode, releasePolicy: "strict" }, replies: [] });
+    try {
+      await f.session.prompt("Give the instruction.");
+      assert.deepEqual(f.errors, []);
+      assert.equal(f.writes(), 0);
+      assert.equal(f.calls.length > 0, mode === "observe");
+      assert.equal(f.results().length, mode === "observe" ? 1 : 0);
+      if (mode === "observe") { assert.equal(f.results()[0].data.audit.status, "failed"); assert.equal(f.results()[0].data.reply, undefined); assert.equal(f.results()[0].data.delivery, "released"); }
+      assert.equal(occurrences(f.render(), original), 1);
+      assert.deepEqual(assistantText(f.sessionManager.buildSessionProjection().messages), [original]);
+    } finally { f.session.dispose(); }
+  });
+  for (const strict of [false, true]) await t.test(`${strict ? "strict" : "warning"} exhausted delivery survives resume`, async () => {
+    const config = { maxRewrites: 0, releasePolicy: strict ? "strict" : "warning", showVerdicts: false };
+    const first = await setup({ config, replies: [] });
+    await first.session.prompt("Give the instruction.");
+    assert.deepEqual(first.errors, []);
+    const file = first.sessionManager.getSessionFile();
+    assert.equal(occurrences(first.render(), original), strict ? 0 : 1);
+    assert.equal(occurrences(first.render(48), "active checks failed"), 1);
+    assert.equal(occurrences(first.render(120, false), original), 1);
+    if (strict) {
+      assert.equal(first.results()[0].data.reply, undefined);
+      assert.equal(first.results()[0].data.delivery, "withheld");
+      const before = first.sessionManager.getBranch().length;
+      await first.command("recover");
+      assert.deepEqual(first.editors.at(-1), ["Withheld draft (inspection only)", original]);
+      assert.equal(first.sessionManager.getBranch().length, before);
+    }
+    first.session.dispose();
+    const manager = sdk.SessionManager.open(file);
+    assert.deepEqual(assistantText(manager.buildSessionProjection().messages), strict ? [] : [original]);
+    const resumed = await setup({ config, priorManager: manager, replies: [] });
+    try {
+      assert.equal(occurrences(resumed.render(), original), strict ? 0 : 1);
+      await resumed.session.prompt("Refer to the instruction you gave.");
+      assert.deepEqual(resumed.errors, []);
+      assert.deepEqual(assistantText(resumed.requests[0].messages), strict ? [] : [original]);
+    } finally { resumed.session.dispose(); }
+  });
+  await t.test("advisory-only unknowns do not block strict delivery", async () => {
+    const f = await setup({ text: good, replies: [], config: { releasePolicy: "strict", model: "typesafe/jev-latest", showVerdicts: false } });
+    try {
+      await f.session.prompt("Give the instruction.");
+      assert.deepEqual(f.errors, []);
+      const data = f.results()[0].data;
+      assert.equal(data.delivery, "released");
+      assert.equal(data.audit.status, "passed");
+      assert.equal(data.audit.advisoryIncomplete, true);
+      assert.match(f.render(), /advisory coverage incomplete/);
+      assert.equal(f.calls.length, 0);
+    } finally { f.session.dispose(); }
+  });
+  await t.test("native streaming component conceals only enforce-mode assistant prose", async () => {
+    const f = await setup({ text: good, replies: [] });
+    try {
+      await f.session.prompt("Give the instruction.");
+      const transform = f.extension.markdownTransformer;
+      assert.equal(transform("Draft text.", { messageType: "assistant", isStreaming: true }), "");
+      assert.equal(transform("User text.", { messageType: "user", isStreaming: true }), "User text.");
+      await f.command("observe");
+      assert.equal(transform("Draft text.", { messageType: "assistant", isStreaming: true }), "Draft text.");
+      assert.equal(occurrences(f.render(), good), 1);
+    } finally { f.session.dispose(); }
+  });
 });

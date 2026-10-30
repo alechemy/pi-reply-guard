@@ -1,6 +1,6 @@
 import { randomUUID } from "node:crypto";
 import { lstatSync, mkdirSync, readFileSync, renameSync, rmdirSync, unlinkSync, writeFileSync } from "node:fs";
-import { join } from "node:path";
+import { dirname, isAbsolute, join } from "node:path";
 import { getAgentDir, type Skill } from "@earendil-works/pi-coding-agent";
 
 export const NAME = "reply-guard";
@@ -8,7 +8,7 @@ export const VERDICT = "reply-guard-verdict";
 export const SKILLS = "reply-guard-skills";
 export const CONFIG_PATH = join(getAgentDir(), `${NAME}.json`);
 
-export interface Config {
+interface LegacyConfig {
 	schemaVersion: 1;
 	thresholdMeaning: "compliance";
 	auditDeadlineMs: number;
@@ -25,13 +25,7 @@ export interface Config {
 	showVerdicts: boolean;
 }
 
-export interface Spec {
-	name: string;
-	text: string;
-	threshold: number;
-}
-
-export const DEFAULTS: Config = {
+const LEGACY_DEFAULTS: LegacyConfig = {
 	schemaVersion: 1,
 	thresholdMeaning: "compliance",
 	auditDeadlineMs: 5000,
@@ -48,11 +42,16 @@ export const DEFAULTS: Config = {
 	showVerdicts: true,
 };
 
-export function parseConfig(text: string): Config {
-	const value = JSON.parse(text);
+function parseObject(text: string) {
+	try { return JSON.parse(text); }
+	catch { throw new Error(`Invalid JSON in ${CONFIG_PATH}. Existing bytes were preserved.`); }
+}
+
+function parseLegacyConfig(text: string): LegacyConfig {
+	const value = parseObject(text);
 	if (!value || typeof value !== "object" || Array.isArray(value)) throw new Error("Configuration must be a JSON object.");
 	const legacy = value.schemaVersion === undefined;
-	const config = { ...DEFAULTS, ...(legacy ? { model: "openrouter/typesafe/jev-1.13", preload: true } : {}), ...value };
+	const config = { ...LEGACY_DEFAULTS, ...(legacy ? { model: "openrouter/typesafe/jev-1.13", preload: true } : {}), ...value };
 	if (config.schemaVersion !== 1) throw new Error("Unsupported schemaVersion. This configuration reader supports version 1.");
 	if (config.thresholdMeaning !== "compliance") throw new Error("Version 1 skill thresholds measure compliance, not violations.");
 	for (const key of ["auditDeadlineMs", "classifierConcurrency", "maxClassifierRequests", "maxInputTokens"] as const) {
@@ -69,6 +68,70 @@ export function parseConfig(text: string): Config {
 		throw new Error("inject, preload, debug, and showVerdicts must be booleans.");
 	}
 	return config;
+}
+
+export interface Config {
+	schemaVersion: 2;
+	thresholdMeaning: "violation";
+	mode: "off" | "observe" | "enforce";
+	releasePolicy: "warning" | "strict";
+	skill: string;
+	skillPath?: string;
+	catalogPath?: string;
+	model: string;
+	maxRewrites: number;
+	writerDeadlineMs: number;
+	auditDeadlineMs: number;
+	classifierConcurrency: number;
+	maxClassifierRequests: number;
+	maxInputTokens: number;
+	preload: boolean;
+	debug: boolean;
+	showVerdicts: boolean;
+}
+
+export const DEFAULTS: Config = {
+	schemaVersion: 2, thresholdMeaning: "violation", mode: "enforce", releasePolicy: "warning", skill: "unslop",
+	model: "openrouter/typesafe/jev-1.14", maxRewrites: 2, writerDeadlineMs: 60000,
+	auditDeadlineMs: 5000, classifierConcurrency: 2, maxClassifierRequests: 8, maxInputTokens: 64000,
+	preload: false, debug: false, showVerdicts: true,
+};
+
+export function parseConfig(text: string): Config {
+	const value = parseObject(text);
+	if (!value || typeof value !== "object" || Array.isArray(value)) throw new Error("Configuration must be a JSON object.");
+	if (value.schemaVersion === undefined || value.schemaVersion === 1) throw new Error("Legacy compliance settings require /reply-guard migrate. Existing bytes were preserved.");
+	if (value.schemaVersion !== 2) throw new Error("Unsupported schemaVersion. This reader supports version 2.");
+	if (["skills", "inject", "reinjectBelow"].some((key) => Object.hasOwn(value, key))) throw new Error("Legacy settings require explicit migration and belong under legacyCompliance.");
+	const config = { ...DEFAULTS, ...value };
+	if (config.thresholdMeaning !== "violation") throw new Error("Version 2 catalog thresholds measure violations.");
+	if (!["off", "observe", "enforce"].includes(config.mode)) throw new Error("Mode must be off, observe, or enforce.");
+	if (!["warning", "strict"].includes(config.releasePolicy)) throw new Error("Release policy must be warning or strict.");
+	if (typeof config.skill !== "string" || !config.skill.trim()) throw new Error("A catalog-backed skill name is required.");
+	for (const key of ["skillPath", "catalogPath"] as const) {
+		if (config[key] !== undefined && (typeof config[key] !== "string" || !isAbsolute(config[key]))) throw new Error(`${key} must be an absolute path.`);
+	}
+	for (const key of ["auditDeadlineMs", "classifierConcurrency", "maxClassifierRequests", "maxInputTokens", "writerDeadlineMs"] as const) {
+		if (!Number.isSafeInteger(config[key]) || config[key] < 1) throw new Error(`${key} must be a positive safe integer.`);
+	}
+	if (!Number.isSafeInteger(config.maxRewrites) || config.maxRewrites < 0) throw new Error("maxRewrites must be a nonnegative integer.");
+	if (typeof config.model !== "string" || !/^[^/]+\/.+/.test(config.model)) throw new Error("Model must use provider/id.");
+	for (const key of ["preload", "debug", "showVerdicts"] as const) if (typeof config[key] !== "boolean") throw new Error(`${key} must be a boolean.`);
+	return config;
+}
+
+export function migrateConfig(text: string): Config {
+	const legacy = parseLegacyConfig(text);
+	const { schemaVersion: _version, thresholdMeaning: _meaning, skills, inject, reinjectBelow, ...settings } = legacy;
+	const names = Object.keys(skills);
+	if (names.length !== 1) throw new Error("Migration requires one catalog-backed skill. Existing configuration was preserved.");
+	return parseConfig(JSON.stringify({ ...DEFAULTS, ...settings, skill: names[0], legacyCompliance: { thresholdMeaning: "compliance", skills, inject, reinjectBelow } }));
+}
+
+export function rulePaths(config: Config, skills: Skill[]) {
+	const skillPath = config.skillPath ?? skills.find((skill) => skill.name === config.skill)?.filePath;
+	if (!skillPath) throw new Error(`Required skill not found: ${config.skill}.`);
+	return { skillPath, catalogPath: config.catalogPath ?? join(dirname(skillPath), "reply-guard.rules.json") };
 }
 
 export function loadConfig(): Config {
@@ -110,29 +173,4 @@ function replaceConfig(text: string, expected: string | undefined): string | und
 		}
 	}
 	return backup;
-}
-
-function skillBody(path: string): string {
-	const text = readFileSync(path, "utf8")
-		.replace(/^---\r?\n[\s\S]*?\r?\n---\r?\n/, "")
-		.trim();
-	if (!text) throw new Error(`Skill is empty: ${path}`);
-	return text;
-}
-
-export function selectSpecs(skills: Skill[], config: Config): Spec[] {
-	return skills
-		.filter((skill) => Object.hasOwn(config.skills, skill.name))
-		.map((skill) => ({ name: skill.name, text: skillBody(skill.filePath), threshold: config.skills[skill.name] }));
-}
-
-export function missingSkills(config: Config, specs: Spec[]): string[] {
-	return Object.keys(config.skills).filter((name) => !specs.some((spec) => spec.name === name));
-}
-
-export function promptSection(specs: Spec[]): string {
-	return [
-		"Every reply to the user must meet the skills below. They govern reply prose, not code, commands, or file contents.",
-		...specs.map((spec) => `<skill name="${spec.name}">\n${spec.text}\n</skill>`),
-	].join("\n\n");
 }

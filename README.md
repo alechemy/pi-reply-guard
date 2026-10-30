@@ -1,67 +1,79 @@
 # pi-reply-guard
 
-[![npm](https://img.shields.io/npm/v/pi-reply-guard)](https://www.npmjs.com/package/pi-reply-guard) [![Pi package](https://img.shields.io/badge/pi-package-blue)](https://pi.dev/packages/pi-reply-guard) [![Downloads](https://img.shields.io/npm/dm/pi-reply-guard)](https://www.npmjs.com/package/pi-reply-guard) [![Stars](https://img.shields.io/github/stars/amalavet/pi-reply-guard)](https://github.com/amalavet/pi-reply-guard/stargazers) [![License](https://img.shields.io/npm/l/pi-reply-guard)](LICENSE)
+This fork of [amalavet/pi-reply-guard](https://github.com/amalavet/pi-reply-guard) audits completed assistant reply prose and repairs active violations with an isolated, tool-free writer. The Unslop catalog maps all 36 rules to 46 checks. The two literal checks enforce immediately. The 44 semantic style checks remain advisory until calibrated.
 
-This branch contains regression fixes and bounded per-rule evaluation for all 36 Unslop rules. [Rule catalog and Markdown checks](docs/rules.md) documents source protection and local auditing. [Per-rule evaluation](docs/evaluation.md) documents Jev execution, coverage, caching, and the diagnostic CLI. [Preservation and isolated repair](docs/repair.md) documents the new repair engine and Pi lifecycle adapter. Keep the extension uninstalled until operating modes and terminal delivery policies are integrated. [Implementation status](docs/implementation.md) records the tested changes and remaining work.
+The package entry point now uses the per-rule evaluator and preservation-checked repair engine. It is tested against Pi 1.4.0. Calibration tooling, fork publication, installation, and live Jev verification remain release work. See [implementation status](docs/implementation.md).
 
-The current Pi lifecycle still uses the legacy evaluator, which asks Jev whether each final reply complies with each configured skill. Its probability estimates the answer to that question. A low compliance probability requests a rewrite within the configured budget.
+## Commands
 
-https://github.com/user-attachments/assets/c8c65cf3-3030-44af-88e1-03f897d86447
+| Command | Action |
+| --- | --- |
+| `/reply-guard` | Opens the settings menu. Use **Edit JSON** for paths, model selection, and budgets. Use **Save settings** to create a fresh configuration. |
+| `/reply-guard status` | Shows effective settings, discovered paths, and classifier registry availability. |
+| `/reply-guard coverage` | Shows source-rule mappings, drift, and calibration status. |
+| `/reply-guard verdict` | Opens the latest structured result for inspection. |
+| `/reply-guard recover` | Opens the latest withheld draft for inspection. |
+| `/reply-guard off` | Disables checking and repair for new replies. |
+| `/reply-guard observe` | Audits the original reply without rewriting or withholding it. |
+| `/reply-guard enforce` | Repairs active violations within the configured budget. |
+| `/reply-guard warning` | Releases the latest preservation-approved candidate with its own verdict. |
+| `/reply-guard strict` | Withholds automatic delivery when required checks fail or remain incomplete. |
+| `/reply-guard migrate` | Converts legacy compliance settings after confirmation and creates a private backup. |
 
-## Install
+Mode or release-policy changes cancel pending repair. Other settings apply to the next request. Recovery opens an inspection editor and leaves canonical conversation context unchanged.
 
-```sh
-pi install npm:pi-reply-guard
-```
+## Configuration
 
-Or install from GitHub:
-
-```sh
-pi install git:github.com/amalavet/pi-reply-guard
-```
-
-## Configure
-
-Run `/reply-guard` in Pi to open the settings menu. Select a setting to change it, or choose “Edit JSON” to edit the full configuration. Each change saves atomically to `~/.pi/agent/reply-guard.json`, backs up the previous bytes, and applies to the next request:
+The configuration lives at `~/.pi/agent/reply-guard.json`, or under Pi's configured agent directory. Fresh defaults are:
 
 ```json
 {
-  "schemaVersion": 1,
-  "thresholdMeaning": "compliance",
+  "schemaVersion": 2,
+  "thresholdMeaning": "violation",
+  "mode": "enforce",
+  "releasePolicy": "warning",
+  "skill": "unslop",
+  "model": "openrouter/typesafe/jev-1.14",
+  "maxRewrites": 2,
+  "writerDeadlineMs": 60000,
   "auditDeadlineMs": 5000,
   "classifierConcurrency": 2,
   "maxClassifierRequests": 8,
   "maxInputTokens": 64000,
-  "skills": {
-    "asd-ste100": 0.3,
-    "i-have-adhd": 0.3,
-    "my-reply-preferences": 0.3
-  },
-  "model": "openrouter/typesafe/jev-1.14",
-  "maxRewrites": 2,
-  "inject": false,
-  "reinjectBelow": 0,
   "preload": false,
   "debug": false,
   "showVerdicts": true
 }
 ```
 
-Install the skills separately. Names must match installed skills. Missing, unreadable, empty, or unconfigured skills produce an incomplete audit with a configuration diagnostic. Invalid configuration leaves the existing file unchanged.
+Install the authoritative skill separately. The guard discovers its `SKILL.md` through Pi and loads `reply-guard.rules.json` beside it. Optional `skillPath` and `catalogPath` settings accept absolute paths. The catalog owns per-rule violation thresholds, exceptions, and calibration records.
 
-Unversioned upstream settings retain their compliance thresholds, default model (`openrouter/typesafe/jev-1.13`), and preload preference. Saving through `/reply-guard` writes schema version 1 and creates a private `.bak` beside the configuration. Version 1 does not accept violation thresholds. The per-rule catalog will use a separate schema.
+Two rewrites permit three candidate audits. Zero rewrites still audits the original. The selected Pi writer model and thinking level are retained. Repair uses no task tools.
 
-| Key | Default | Meaning |
-|---|---|---|
-| `skills` | `{}` | Installed skill name that replies must adhere to, with a threshold (0-1) to pass. A reply passes when the probability that it meets the skill is at or above the threshold |
-| `model` | `openrouter/typesafe/jev-1.14` | Classifier model, `provider/id`. Existing selections are retained. |
-| `maxRewrites` | `2` | Additional writer generations. The original and both revisions receive an audit attempt. Zero still audits the original. Exhaustion releases the current reply with a failed or incomplete status. |
-| `auditDeadlineMs` | `5000` | Overall audit deadline per candidate, including provider work. |
-| `classifierConcurrency` | `2` | Maximum concurrent classifier requests. |
-| `maxClassifierRequests` | `8` | Request limit per candidate. Native SDK retries are disabled. |
-| `maxInputTokens` | `64000` | Cumulative conservative input budget. UTF-8 bytes plus 256 tokens of overhead bound each request. Oversized input is reported incomplete without truncation. |
-| `inject` | `false` | Set to `true` to add the full text of the failed skills to each rewrite request. |
-| `reinjectBelow` | `0` | Adds the full text of a failed skill to the rewrite request when its probability is below this value (0-1). `0` disables it. `inject: true` takes precedence. |
-| `preload` | `false` | Adds the full text of the guarded skills to the context once. Leave disabled when an existing loader supplies the skill. |
-| `debug` | `false` | Records structured lifecycle events, hashes, and verdicts. New traces omit raw provider payloads, tool arguments, and draft text. |
-| `showVerdicts` | `true` | Shows the audit result. Disabling this hides successful checks. Failures and incomplete checks remain visible. |
+Each candidate audit has one deadline and shared classifier budgets. Oversized passage checks use overlapping chunks. Checks requiring exact full context remain incomplete when that context cannot fit. Native classifier retries are disabled. See [per-rule evaluation](docs/evaluation.md).
+
+Leave `preload` disabled when an existing loader supplies the complete skill. When enabled, the guard adds the skill text once per distinct version on the active branch. `showVerdicts: false` hides clean results. Failures, advisory findings, and incomplete coverage remain visible. `debug` adds structured candidate diagnostics to expanded verdicts.
+
+Settings save atomically with private backups and protection against concurrent edits. Invalid configuration remains unchanged and withholds automatic delivery until corrected. A valid configuration with a missing skill or catalog produces an incomplete audit under its selected mode and policy.
+
+### Legacy migration
+
+Run `/reply-guard migrate` against an unversioned or version 1 configuration. Migration preserves the selected model, preload preference, budgets, and unrelated settings. It retains whole-skill thresholds under `legacyCompliance` with their original compliance meaning. The catalog supplies the new violation thresholds. Legacy injection settings are retained in that same record.
+
+Migration requires one catalog-backed skill. Configurations selecting multiple legacy skills remain unchanged pending an explicit mapping decision. A preserved model selection outside the supported pinned routes remains unavailable until the operator changes it. `/reply-guard status` reports registry availability. Authentication requires a separate connection check.
+
+## Delivery and privacy
+
+The terminal hides enforced drafts and renders the selected reply once. Context edits retain that exact text for the next user turn and resumed sessions. Strictly withheld drafts are omitted from future main-agent context and remain available through `/reply-guard recover`.
+
+Drafts are sent to the classifier and isolated writer. Raw session files, JSON events, RPC streams, and exports can contain drafts, including withheld text. Strict terminal concealment does not protect an unbuffered external consumer. See [delivery and operating modes](docs/delivery.md) for metadata and recovery behavior.
+
+## Implementation references
+
+- [Rule catalog and Markdown checks](docs/rules.md)
+- [Per-rule evaluation and diagnostic CLI](docs/evaluation.md)
+- [Preservation and isolated repair](docs/repair.md)
+- [Delivery and operating modes](docs/delivery.md)
+- [Implementation status and verification](docs/implementation.md)
+
+The upstream MIT license and author attribution are retained.
