@@ -2,7 +2,7 @@
 
 This fork of [amalavet/pi-reply-guard](https://github.com/amalavet/pi-reply-guard) audits completed assistant reply prose and repairs active violations with an isolated, tool-free writer. The Unslop catalog maps all 36 rules to 46 checks. The two literal checks enforce immediately. The 44 semantic style checks remain advisory until calibrated.
 
-The package entry point now uses the per-rule evaluator and preservation-checked repair engine. It is tested against Pi 1.4.0. Calibration tooling, fork publication, installation, and live Jev verification remain release work. See [implementation status](docs/implementation.md).
+The package entry point now uses the per-rule evaluator and preservation-checked repair engine. It is tested against Pi 1.4.0. [Calibration tools](docs/calibration.md) provide corpus import, bounded evaluation, and reviewed per-rule promotion. Fork publication, installation, and live Jev verification remain release work. See [implementation status](docs/implementation.md).
 
 ## Commands
 
@@ -74,6 +74,7 @@ Drafts are sent to the classifier and isolated writer. Raw session files, JSON e
 - [Per-rule evaluation and diagnostic CLI](docs/evaluation.md)
 - [Preservation and isolated repair](docs/repair.md)
 - [Delivery and operating modes](docs/delivery.md)
+- [Corpus evaluation and semantic calibration](docs/calibration.md)
 - [Implementation status and verification](docs/implementation.md)
 
 The upstream MIT license and author attribution are retained.

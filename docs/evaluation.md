@@ -1,6 +1,6 @@
 # Per-rule evaluation
 
-The evaluator runs the catalog's semantic questions through Pi's native classifier registry. All 44 house semantic checks remain advisory. The two local punctuation checks remain active. The diagnostic CLI and package entry point share the audit function. The package integrates it with the [repair lifecycle](repair.md) and [delivery policies](delivery.md).
+The evaluator runs the catalog's semantic questions through Pi's native classifier registry. All 44 house semantic checks remain advisory. The two local punctuation checks remain active. The diagnostic CLI and package entry point share the audit function. The package integrates it with the [repair lifecycle](repair.md) and [delivery policies](delivery.md). [Corpus evaluation](calibration.md) adds dataset-wide limits, per-check measurements, and reviewed promotion. Active semantic checks become advisory when the classifier identity differs from their reviewed model.
 
 ## Diagnostic audit
 

@@ -98,6 +98,17 @@ test("package entry point, delivery policies, and native Pi rendering", async (t
       assert.equal(f.calls.length, 0);
     } finally { f.session.dispose(); }
   });
+  await t.test("stale calibration stays visible when clean verdicts are hidden", async () => {
+    const f = await setup({ text: good, replies: [], config: { showVerdicts: false } });
+    try {
+      await f.session.prompt("Give the instruction.");
+      const data = f.results()[0].data;
+      const id = data.audit.checks.find((check) => check.disposition === "advisory").id;
+      f.sessionManager.appendCustomEntry("reply-guard-repair", { ...data, reply: undefined, audit: { ...data.audit, checks: data.audit.checks.map((check) => check.id === id ? { ...check, calibration: { ...check.calibration, state: "stale" } } : check) } });
+      assert.match(f.render(), /1 stale calibration/);
+      assert.deepEqual(f.errors, []);
+    } finally { f.session.dispose(); }
+  });
   await t.test("native streaming component conceals only enforce-mode assistant prose", async () => {
     const f = await setup({ text: good, replies: [] });
     try {

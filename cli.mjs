@@ -7,6 +7,7 @@ import { createJevAdapter, JEV_MODEL } from "./lib/jev.mjs";
 import { coverageReport, loadCatalog } from "./lib/catalog.mjs";
 import { createView } from "./lib/markdown.mjs";
 import { evaluateLocal, planSemanticChecks } from "./lib/local-checks.mjs";
+import { CALIBRATION_COMMANDS, calibrationMain } from "./lib/calibration-cli.mjs";
 
 async function loadRegistry() {
   const sdk = await import(process.env.PI_PACKAGE_ROOT ? pathToFileURL(join(process.env.PI_PACKAGE_ROOT, "dist/index.js")).href : "@earendil-works/pi-coding-agent");
@@ -15,7 +16,8 @@ async function loadRegistry() {
 
 export async function main(args, { registry, fetch: requestFetch } = {}) {
   const [command, ...options] = args;
-  if (!["coverage", "check-catalog", "audit-local", "audit"].includes(command)) throw new Error("Usage: node cli.mjs <coverage|check-catalog|audit-local|audit> --catalog FILE --skill FILE [--text FILE] [--request FILE] [--provenance FILE] [--conversation FILE] [--limits FILE] [--model PROVIDER/ID]");
+  if (CALIBRATION_COMMANDS.includes(command)) return calibrationMain(args, { registry, fetch: requestFetch, loadRegistry });
+  if (!["coverage", "check-catalog", "audit-local", "audit"].includes(command)) throw new Error("Usage: node cli.mjs <coverage|check-catalog|audit-local|audit|corpus-import|evaluate-corpus|calibration-report|calibration-review|promote-rule> --catalog FILE --skill FILE [--text FILE] [--request FILE] [--provenance FILE] [--conversation FILE] [--limits FILE] [--model PROVIDER/ID]. Corpus options: docs/calibration.md.");
   const flags = new Map();
   for (let index = 0; index < options.length; index += 2) {
     const flag = options[index];

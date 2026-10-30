@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { pathToFileURL } from "node:url";
@@ -8,6 +8,7 @@ import { main } from "../cli.mjs";
 import { createJevAdapter, JEV_MODEL } from "../lib/jev.mjs";
 import { auditCandidate } from "../lib/evaluator.mjs";
 import { inspectCatalog } from "../lib/catalog.mjs";
+import { importCorpus } from "../lib/corpus.mjs";
 import { makeCatalog, skill } from "./fixtures/catalog.mjs";
 
 const piRoot = process.env.PI_PACKAGE_ROOT;
@@ -158,6 +159,38 @@ test("installed Pi native System One transport", async (t) => {
     assert.equal((await main(["audit", ...flags, "--model", "typesafe/jev-latest"], { registry, fetch })).data.advisoryIncomplete, true);
     writeFileSync(files.text, "Fictional response.");
     assert.equal((await main(["audit", ...flags, "--model", "typesafe/jev-latest"], { registry, fetch })).code, 2);
+  });
+  await t.test("corpus CLI uses native authentication and an isolated explicit writer", async () => {
+    const files = { corpus: join(home, "corpus.json"), catalog: join(home, "corpus-catalog.json"), skill: join(home, "corpus-skill.md"), output: join(home, "evaluation.json"), "repair-drafts": join(home, "repair-drafts.json") };
+    const corpus = importCorpus([{ id: "fixture", group: "fixture", split: "development", kind: "style", request: "Write a fictional reply.", reply: "A fixture—reply.", labels: { "em-dash": "violation" }, review: { basis: "synthetic" } }], { name: "fixture", version: "v1" });
+    writeFileSync(files.corpus, JSON.stringify(corpus));
+    writeFileSync(files.catalog, JSON.stringify(makeCatalog()));
+    writeFileSync(files.skill, skill);
+    let writes = 0;
+    const writerModel = { provider: "fixture", id: "writer-1", contextWindow: 100000, maxTokens: 1000 };
+    const models = { getModelOfType: (type, provider, id) => type === "chat" ? writerModel : registry.getModelOfType(type, provider, id), classify: registry.classify.bind(registry), streamSimple(_model, context, options) {
+      writes++;
+      assert.equal(options.toolChoice, "none");
+      assert.deepEqual(context.tools, []);
+      assert.equal(options.maxRetries, 0);
+      return { result: async () => ({ stopReason: "stop", content: [{ type: "text", text: "A fixture reply." }], provider: "fixture", model: "writer-1" }) };
+    } };
+    const fetch = async (_url, init) => {
+      assert.equal(new Headers(init.headers).get("authorization"), "Bearer fictional-test-key");
+      const body = JSON.parse(init.body);
+      return new Response(JSON.stringify({ model: body.model, answers: Object.fromEntries(Object.keys(body.questions).map((id) => [id, { type: "noul", noul: 0 }])) }));
+    };
+    const result = await main(["evaluate-corpus", ...Object.entries(files).flatMap(([key, path]) => [`--${key}`, path]), "--split", "development", "--allow-remote", "yes", "--writer-model", "fixture/writer-1"], { registry: models, fetch });
+    assert.equal(result.code, 0);
+    assert.equal(writes, 1);
+    const evaluation = JSON.parse(readFileSync(files.output, "utf8"));
+    assert.equal(evaluation.execution, "provider");
+    assert.equal(evaluation.model.model, "typesafe/jev-1.14");
+    assert.equal(evaluation.rows[0].repair.acceptedByAudit, true);
+    assert.doesNotMatch(JSON.stringify(evaluation), /fictional-test-key|A fixture reply|A fixture—reply/);
+    const drafts = JSON.parse(readFileSync(files["repair-drafts"], "utf8"));
+    assert.equal(drafts[0].reply, "A fixture reply.");
+    assert.equal(drafts[0].review.basis, "unreviewed");
   });
   await t.test("complete evaluator runs all rules through the real registry and adapter", async () => {
     const f = transport((request) => ({ model: request.model, usage: { input_tokens: 100, output_tokens: 20 }, answers: Object.fromEntries(Object.keys(request.questions).map((id) => [id, { type: "noul", noul: id === "fictional-9" ? 1 : 0 }])) }));

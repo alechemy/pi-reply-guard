@@ -92,11 +92,18 @@ Unique draft markers prevent duplicate terminal delivery without hiding identica
 
 Mode and policy commands cancel pending repair while preserving the consumed request's rewrite count. Handled input and resumed extension feedback also retain that count. Request-derived exact-copy sources protect local auditing and every repair baseline. Ambiguous reproduction intent remains incomplete. Native SDK tests exposed the missing settlement abort signal, so isolated repair now runs at the active turn boundary. Abort during classification or repair produces no late release. The settings editor uses schema version 2, explicit legacy migration, and the existing private backup and concurrency protections.
 
+## Calibration tooling checkpoint
+
+[Calibration commands](calibration.md) import supplied replies and corrections into versioned private corpora. They preserve per-check labels and source context, separate development and held-out groups, and reject duplicate samples and cross-split prose reuse. Missing request context remains explicit.
+
+Evaluation reports per-check errors, incomplete coverage, sample counts, latency, and bounded repair behavior. Dedicated preservation samples measure damage acceptance separately. Generated repairs require human review before a meaning-regression rate can be established. Reports retain hashes and structured outcomes. Raw repair drafts use a separate private artifact.
+
+Promotion consumes exact reviewed held-out evidence and checks sample counts, error bounds, threshold, evaluator, definition, and model identity. A definition or model change makes the effective semantic check advisory with visible stale calibration. Native Pi tests cover corpus evaluation, authentication forwarding, and isolated writer calls with synthetic responses.
+
+The house semantic checks remain advisory. No held-out human corpus has been evaluated. The workflow prioritizes rules 9, 25, 34, and 35.
+
 ## Remaining implementation
 
-Continue in this order:
-
-1. Add corpus import, held-out evaluation, and reviewable promotion records. The synthetic preservation fixtures are implemented. Prioritize semantic style calibration for rules 9, 25, 34, and 35, and evaluate preservation separately.
-2. Finish fork publication, immutable package registration, idempotent Stow integration, deployment configuration, and rollback. Test the chosen authenticated Jev route with a bounded synthetic smoke test and record served versions, latency, and usage.
+Finish fork publication, immutable package registration, idempotent Stow integration, deployment configuration, and rollback. Test the chosen authenticated Jev route with a bounded synthetic smoke test and record served versions, latency, and usage.
 
 A final supported Pi range and an installed revision must be recorded after these stages pass. The current branch is a development checkpoint.

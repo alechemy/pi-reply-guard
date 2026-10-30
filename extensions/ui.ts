@@ -12,7 +12,8 @@ export type Delivery = {
 	audit?: { status: string; incomplete: boolean; advisoryIncomplete?: boolean; error?: string; checks: AuditCheck[]; catalogIssues?: unknown[] };
 };
 const digest = (text: string) => createHash("sha256").update(text.trim()).digest("hex");
-const quiet = (data: Delivery) => data.showVerdicts === false && data.delivery === "released" && data.audit?.status === "passed" && !data.audit.incomplete && !data.audit.advisoryIncomplete && !data.audit.checks.some((check) => check.outcome === "violation");
+const staleCalibrations = (data: Delivery) => data.audit?.checks.filter((check) => check.calibration?.state === "stale").length ?? 0;
+const quiet = (data: Delivery) => !staleCalibrations(data) && !data.audit?.catalogIssues?.length && data.showVerdicts === false && data.delivery === "released" && data.audit?.status === "passed" && !data.audit.incomplete && !data.audit.advisoryIncomplete && !data.audit.checks.some((check) => check.outcome === "violation");
 
 export function statusText(data: Delivery): string {
 	const audit = data.audit;
@@ -21,6 +22,7 @@ export function statusText(data: Delivery): string {
 		`${data.mode}: active checks ${audit?.status ?? "unchecked"}${audit?.incomplete && audit.status !== "incomplete" ? ", incomplete" : ""}`,
 		`${advisory.length} advisory (${advisory.filter((check) => check.outcome === "violation").length} flagged, ${advisory.filter((check) => check.calibration?.state === "uncalibrated").length} uncalibrated)`,
 		...(audit?.advisoryIncomplete ? ["advisory coverage incomplete"] : []),
+		...(staleCalibrations(data) ? [`${staleCalibrations(data)} stale calibration`] : []),
 		...(audit?.catalogIssues?.length ? ["catalog stale or incomplete"] : []),
 		`${data.delivery} (${data.termination})`,
 	].join(" · ");
@@ -49,7 +51,7 @@ export function registerUI(pi: ExtensionAPI) {
 		const data = entry.data;
 		if (!data) return content;
 		if (!quiet(data)) {
-			const color = data.delivery === "released" && data.audit?.status === "passed" && !data.audit.advisoryIncomplete ? "muted" : "warning";
+			const color = data.delivery === "released" && data.audit?.status === "passed" && !data.audit.advisoryIncomplete && !staleCalibrations(data) && !data.audit.catalogIssues?.length ? "muted" : "warning";
 			const lines = [`[${NAME}] ${statusText(data)}`];
 			if (data.audit?.error) lines.push(data.audit.error);
 			if (data.delivery === "withheld") lines.push("Inspect the stored draft with /reply-guard recover.");

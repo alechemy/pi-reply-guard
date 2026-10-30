@@ -40,6 +40,15 @@
     "checks": {"type": "array", "minItems": 1, "items": {"$ref": "#/definitions/check"}}
   },
   "definitions": {
+    "calibrated": {
+      "type": "object", "additionalProperties": false,
+      "required": ["state", "threshold", "model", "dataset", "priority", "record"],
+      "properties": {
+        "state": {"const": "calibrated"}, "threshold": {"type": "number", "minimum": 0, "maximum": 1},
+        "model": {"type": "object"}, "dataset": {"type": "object"}, "priority": {"enum": ["normal", "high"]},
+        "record": {"type": "object"}
+      }
+    },
     "digest": {"type": "string", "pattern": "^[a-f0-9]{64}$"},
     "check": {
       "type": "object", "additionalProperties": false,
@@ -72,7 +81,7 @@
             "true": {"type": "string", "minLength": 1}, "false": {"type": "string", "minLength": 1}
           }}
         }},
-        "calibration": {"oneOf": [{"type": "null"}, {
+        "calibration": {"oneOf": [{"type": "null"}, {"$ref": "#/definitions/calibrated"}, {
           "type": "object", "additionalProperties": false,
           "required": ["state", "threshold", "model", "dataset", "priority"],
           "properties": {
@@ -93,7 +102,7 @@
       "allOf": [{
         "if": {"properties": {"kind": {"const": "local"}}},
         "then": {"required": ["predicate"], "properties": {"predicate": {}, "question": false, "scope": {"const": "passage"}, "calibration": {"type": "null"}}},
-        "else": {"required": ["question"], "properties": {"question": {}, "predicate": false, "calibration": {"type": "object"}, "status": {"const": "advisory"}}}
+        "else": {"required": ["question"], "properties": {"question": {}, "predicate": false, "calibration": {"type": "object"}}, "allOf": [{"if": {"properties": {"calibration": {"type": "object", "properties": {"state": {"const": "uncalibrated"}}}}}, "then": {"properties": {"status": {"const": "advisory"}}}}]}
       }]
     }
   }

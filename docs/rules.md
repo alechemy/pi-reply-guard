@@ -21,11 +21,11 @@ The catalog feeds the [per-rule evaluator](evaluation.md), which provides bounde
 | `lib/judgment-cache.mjs` | Bounded in-memory judgments keyed by versioned hashes. |
 | `cli.mjs` | Network-free catalog inspection and local audits, plus explicit remote diagnostic audits. |
 
-Source, ruleset, preprocessing, detector, and protection metadata are shared in the JSON document. `loadCatalog()` resolves those fields onto every check. Each resolved check also carries a definition digest covering its question, exceptions, threshold, examples, and source binding.
+Source, ruleset, preprocessing, detector, and protection metadata are shared in the JSON document. `loadCatalog()` resolves those fields onto every check. Each resolved check also carries a definition digest covering its question, exceptions, threshold, examples, and source binding. A separate calibration digest binds detector behavior without including activation status or the evidence record itself. Definition drift makes a calibrated check advisory and marks its calibration stale.
 
 `inspectCatalog()` compares every numbered source rule and its location with the catalog. Added, removed, changed, or unmapped rules produce diagnostics. Policy changes before the numbered rules invalidate all mappings. Stale local checks are unavailable. Unaffected findings remain available alongside the incomplete catalog status.
 
-The schema rejects activation of uncalibrated semantic checks. Promotion will require a reviewed held-out record in the calibration phase. Process requirements are recorded separately and are never reported as verified mental activity.
+The schema rejects activation of uncalibrated semantic checks. [Promotion](calibration.md#review-and-promote) consumes an explicitly approved held-out record with qualifying per-check error counts and version bindings. Process requirements are recorded separately and are never reported as verified mental activity.
 
 ## Inspect and audit
 
