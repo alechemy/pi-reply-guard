@@ -101,7 +101,7 @@ test("loaded extension failure, cancellation, and configuration regressions", as
       assert.equal(f.results().at(-1).data.delivery, "withheld");
       assert.equal(f.results().at(-1).data.termination, mode === "abort" ? "cancelled" : "mode-changed");
       assert.equal(f.results().at(-1).data.rewrites, 1);
-      if (mode !== "abort") assert.equal(f.statuses.at(-1)[1], `Mode: ${mode}`);
+      assert.deepEqual(f.statuses.at(-1), ["reply-guard", undefined]);
       assert.doesNotMatch(f.render(), /Retain the log/);
       assert.deepEqual(assistantText(f.sessionManager.buildSessionProjection().messages), []);
       release(good);
@@ -209,7 +209,7 @@ test("loaded extension failure, cancellation, and configuration regressions", as
     try {
       await f.session.prompt("Give the instruction.");
       const replacement = JSON.stringify({ schemaVersion: 2, skill: "fixture", mode: "observe" });
-      f.ui.select = async () => { writeFileSync(configPath, replacement); return "Show verdicts: on"; };
+      f.ui.select = async (_title, options) => { writeFileSync(configPath, replacement); return options.find((option) => option.startsWith("Show verdicts:")); };
       await f.command("");
       assert.equal(readFileSync(configPath, "utf8"), replacement);
       assert.ok(f.notices.some(([text]) => text.includes("Configuration changed")));

@@ -36,8 +36,11 @@ test("package entry point, delivery policies, and native Pi rendering", async (t
       assert.equal(data.rewrites, replies.length);
       assert.equal(data.candidates.length, termination === "repeated-candidate" ? replies.length : replies.some((reply) => ["TOOL", "ERROR", ""].includes(reply)) ? 1 : replies.length + 1);
       assert.equal(occurrences(f.render(), expected), 1);
-      assert.match(f.render(), /active checks/);
-      assert.match(f.render(), /advisory/);
+      if (data.audit.status === "passed") assert.doesNotMatch(f.render(), /\[reply-guard\]/);
+      else {
+        assert.match(f.render(), /active checks/);
+        assert.match(f.render(), /advisory/);
+      }
       assert.deepEqual(assistantText(f.sessionManager.buildSessionProjection().messages), [expected]);
       assert.ok(f.sessionManager.getBranch().some((entry) => entry.customType === "other-extension"));
       await f.session.prompt("Refer to your instruction.");
@@ -94,7 +97,8 @@ test("package entry point, delivery policies, and native Pi rendering", async (t
       assert.equal(data.delivery, "released");
       assert.equal(data.audit.status, "passed");
       assert.equal(data.audit.advisoryIncomplete, true);
-      assert.match(f.render(), /advisory coverage incomplete/);
+      assert.doesNotMatch(f.render(), /\[reply-guard\]/);
+      assert.match(f.render(120, true, true), /advisory coverage incomplete/);
       assert.equal(f.calls.length, 0);
     } finally { f.session.dispose(); }
   });

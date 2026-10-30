@@ -13,7 +13,7 @@ Run `/reply-guard trial off` to remove the experimental opt-in. This retains the
 
 The live configuration stores the selection in `experimentalChecks`. Its default is an empty array. Only the two IDs above are accepted. The JSON editor also accepts either check individually.
 
-The runtime marks selected checks active without changing their catalog status or calibration evidence. Verdicts and coverage label them experimental and uncalibrated. This label remains visible when clean verdicts are otherwise hidden. Stale definitions and stale calibration cannot be reactivated through the trial.
+The runtime marks selected checks active without changing their catalog status or calibration evidence. Expanded verdicts, `/reply-guard verdict`, and `/reply-guard coverage` label them experimental and uncalibrated. Passing banners follow the `showVerdicts` preference. Stale definitions and stale calibration cannot be reactivated through the trial.
 
 The trial uses each check's existing threshold. The house catalog currently uses 0.9. It retains exact-source protection, all preservation checks, audit budgets, the rewrite cap, and the tool-free writer. Under warning release, a rejected revision leaves the latest preservation-approved reply visible, even when that reply still has a style violation.
 

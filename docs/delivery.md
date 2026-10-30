@@ -10,7 +10,7 @@ The package entry point registers the catalog-backed evaluator, isolated writer,
 | `observe` | Runs the complete configured audit. | Never requested. | The original remains visible, including failed or incomplete results. |
 | `enforce` | Audits the original and each revision. | Repairs active violations within the cap. | Applies the selected warning or strict policy. |
 
-Warning policy releases the latest preserved candidate with the audit for that exact candidate. Strict policy requires all applicable active style checks and revision-preservation checks to pass completely. Advisory-only unknowns do not block release. Their incomplete coverage remains visible beside the active-check result.
+Warning policy releases the latest preserved candidate with the audit for that exact candidate. Strict policy requires all applicable active style checks and revision-preservation checks to pass completely. Advisory-only unknowns do not block release. Their incomplete coverage is recorded in the verdict.
 
 Malformed, unsupported, or unreadable configuration cannot establish a trusted operating policy. The guard withholds the draft and directs the operator to `/reply-guard status`. A valid configuration with an unavailable catalog retains its selected policy and records an incomplete audit.
 
@@ -37,7 +37,11 @@ Markers identify individual drafts, so identical text in another unguarded reply
 
 Released text replaces the original assistant's content in canonical context. Pending and withheld candidates are filtered from model requests and audit conversation context. Strict withholding and turn-boundary cancellation append omission edits immediately. A late cancellation or conflicting edit can leave provisional text in Pi's committed projection until the next boundary appends an omission edit. The context filter excludes it from provider requests during that interval, including after resume. Raw original entries and their usage are retained. Removing the extension leaves ordinary assistant history readable, but removes its custom rendering and concealment.
 
-`showVerdicts: false` suppresses clean results. Known failures, advisory findings, and unavailable coverage remain visible. Expanded verdicts list individual checks. Experimental checks retain a visible uncalibrated label, including when clean verdicts are otherwise hidden. With `debug` enabled, expansion also shows structured candidate audits and writer usage. `/reply-guard verdict` opens the latest result metadata for inspection.
+`showVerdicts` defaults to `false`. Released replies whose active checks pass render without a banner, including experimental passes and results with advisory findings or incomplete advisory coverage. Failures, incomplete active checking, withheld replies, errors, and stale calibration or catalog warnings remain visible. The current display preference also applies to resumed history. Set `showVerdicts: true` to show passing banners.
+
+Expanded results list individual checks, advisory coverage, and experimental uncalibrated labels. With `debug` enabled, expansion also shows structured candidate audits and writer usage. `/reply-guard verdict` opens the latest result metadata for inspection.
+
+The footer displays `Reply guard: checking` during enforced auditing and repair. It clears after delivery or cancellation and stays empty on startup, navigation, and mode changes. `/reply-guard status` shows the current mode and settings.
 
 ## Integration metadata
 
@@ -64,7 +68,7 @@ Terminal concealment does not redact raw session files, streamed JSON or RPC eve
 
 ```sh
 PI_PACKAGE_ROOT="$(brew --prefix pi-coding-agent)/libexec/lib/node_modules/@earendil-works/pi-coding-agent" \
-  node --test test/sdk.mjs test/regressions.mjs test/review-regressions.mjs test/repair.mjs test/repair-sdk.mjs
+  node --test test/sdk.mjs test/ui-sdk.mjs test/regressions.mjs test/review-regressions.mjs test/repair.mjs test/repair-sdk.mjs
 ```
 
 The tests load the real package entry point through Pi's SDK and render with Pi's assistant-message component and the registered entry renderers. They cover operating modes, release policies, exact fallback context, resume, interruption, cancellation during classification and repair, earlier and later settlement handlers, continuation, consumed-request budgets, request-derived literals, configuration migration, and private backups. Classifier and writer responses are synthetic. Test authentication and HOME directories are disposable.

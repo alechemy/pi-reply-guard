@@ -98,9 +98,9 @@ export async function setup({ config = {}, configText, catalog = makeCatalog(), 
   const { session } = await sdk.createAgentSession({ cwd: home, agentDir, resourceLoader, settingsManager, modelRuntime: runtime, model, thinkingLevel: "off", sessionManager, tools: [] });
   await session.bindExtensions({ uiContext: ui, onError: (error) => errors.push(error) });
   const results = () => sessionManager.getBranch().filter((entry) => entry.customType === "reply-guard-repair");
-  const render = (width = 120, enabled = true) => sessionManager.buildContextEntries().flatMap((entry) => {
+  const render = (width = 120, enabled = true, expanded = false) => sessionManager.buildContextEntries().flatMap((entry) => {
     if (entry.type === "message" && entry.message.role === "assistant") return new AssistantMessageComponent(entry.message, true, sdk.getMarkdownTheme(), "Thinking...", 1, enabled ? [extension.markdownTransformer] : []).render(width);
-    if (entry.type === "custom" && enabled) return extension.entryRenderers.get(entry.customType)?.(entry, { expanded: false }, themes.theme)?.render(width) ?? [];
+    if (entry.type === "custom" && enabled) return extension.entryRenderers.get(entry.customType)?.(entry, { expanded }, themes.theme)?.render(width) ?? [];
     return [];
   }).join("\n");
   const command = (args) => extension.commands.get("reply-guard").handler(args, { ...ctx, hasUI: true, ui, sessionManager, getSystemPromptOptions: () => ({ skills }) });

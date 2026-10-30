@@ -13,6 +13,7 @@ export default function (pi: ExtensionAPI) {
 	const ui = registerUI(pi);
 	async function snapshot(ctx: ExtensionContext) {
 		const config = loadConfig();
+		ui.configure(config);
 		if (config.mode === "off") return config;
 		try {
 			const paths = rulePaths(config, skills);
@@ -26,10 +27,15 @@ export default function (pi: ExtensionAPI) {
 	}
 	const lifecycle = registerRepairLifecycle(pi, snapshot, ui);
 	registerConfigCommand(pi, { skills: () => skills, changed: (config, previous, ctx) => {
+		ui.configure(config);
 		if (config.mode !== previous?.mode || config.releasePolicy !== previous?.releasePolicy || JSON.stringify(config.experimentalChecks) !== JSON.stringify(previous?.experimentalChecks ?? [])) lifecycle.changeMode(config.mode, ctx);
 	} });
 	for (const event of ["session_start", "session_tree"] as const) pi.on(event, (_event, ctx) => {
-		try { ui.mode(loadConfig().mode, ctx); } catch { ui.mode("enforce", ctx); }
+		try {
+			const config = loadConfig();
+			ui.configure(config);
+			ui.mode(config.mode, ctx);
+		} catch { ui.mode("enforce", ctx); }
 	});
 	pi.on("before_agent_start", (event, ctx) => {
 		skills = event.systemPromptOptions.skills;

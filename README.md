@@ -22,7 +22,7 @@ The package entry point now uses the per-rule evaluator and preservation-checked
 | `/reply-guard strict` | Withholds automatic delivery when required checks fail or remain incomplete. |
 | `/reply-guard migrate` | Converts legacy compliance settings after confirmation and creates a private backup. |
 
-Mode, release-policy, or experimental-selection changes cancel pending repair. Other settings apply to the next request. Recovery opens an inspection editor and leaves canonical conversation context unchanged.
+Mode, release-policy, or experimental-selection changes cancel pending repair. The current `showVerdicts` setting controls display, including resumed history. Other settings apply to the next request. Recovery opens an inspection editor and leaves canonical conversation context unchanged.
 
 ## Configuration
 
@@ -45,7 +45,7 @@ The configuration lives at `~/.pi/agent/reply-guard.json`, or under Pi's configu
   "maxInputTokens": 64000,
   "preload": false,
   "debug": false,
-  "showVerdicts": true
+  "showVerdicts": false
 }
 ```
 
@@ -55,7 +55,7 @@ Two rewrites permit three candidate audits. Zero rewrites still audits the origi
 
 Each candidate audit has one deadline and shared classifier budgets. Oversized passage checks use overlapping chunks. Checks requiring exact full context remain incomplete when that context cannot fit. Native classifier retries are disabled. See [per-rule evaluation](docs/evaluation.md).
 
-Leave `preload` disabled when an existing loader supplies the complete skill. When enabled, the guard adds the skill text once per distinct version on the active branch. `showVerdicts: false` hides clean results. Failures, advisory findings, and incomplete coverage remain visible. `debug` adds structured candidate diagnostics to expanded verdicts.
+Leave `preload` disabled when an existing loader supplies the complete skill. When enabled, the guard adds the skill text once per distinct version on the active branch. `showVerdicts` defaults to `false`, hiding passing banners even when advisory coverage is incomplete or experimental checks are enabled. Failures, incomplete active checks, withheld replies, and stale calibration or catalog warnings remain visible. Expand a result or run `/reply-guard verdict` for advisory findings and coverage details. The footer shows a brief checking indicator and clears when checking ends. `debug` adds structured candidate diagnostics to expanded verdicts.
 
 Settings save atomically with private backups and protection against concurrent edits. Invalid configuration remains unchanged and withholds automatic delivery until corrected. A valid configuration with a missing skill or catalog produces an incomplete audit under its selected mode and policy.
 

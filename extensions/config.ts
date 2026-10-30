@@ -96,7 +96,7 @@ export const DEFAULTS: Config = {
 	schemaVersion: 2, thresholdMeaning: "violation", mode: "enforce", experimentalChecks: [], releasePolicy: "warning", skill: "unslop",
 	model: "openrouter/typesafe/jev-1.14", maxRewrites: 2, writerDeadlineMs: 60000,
 	auditDeadlineMs: 5000, classifierConcurrency: 2, maxClassifierRequests: 8, maxInputTokens: 64000,
-	preload: false, debug: false, showVerdicts: true,
+	preload: false, debug: false, showVerdicts: false,
 };
 
 export function parseConfig(text: string): Config {

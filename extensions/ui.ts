@@ -14,7 +14,7 @@ export type Delivery = {
 const digest = (text: string) => createHash("sha256").update(text.trim()).digest("hex");
 const staleCalibrations = (data: Delivery) => data.audit?.checks.filter((check) => check.calibration?.state === "stale").length ?? 0;
 const experimentalCount = (data: Delivery) => data.audit?.checks.filter((check) => check.experimental).length ?? 0;
-const quiet = (data: Delivery) => !experimentalCount(data) && !staleCalibrations(data) && !data.audit?.catalogIssues?.length && data.showVerdicts === false && data.delivery === "released" && data.audit?.status === "passed" && !data.audit.incomplete && !data.audit.advisoryIncomplete && !data.audit.checks.some((check) => check.outcome === "violation");
+const quiet = (data: Delivery, showVerdicts: boolean) => !showVerdicts && data.delivery === "released" && data.audit?.status === "passed" && !data.audit.incomplete && !data.audit.error && !staleCalibrations(data) && !data.audit.catalogIssues?.length;
 
 export function statusText(data: Delivery): string {
 	const audit = data.audit;
@@ -32,6 +32,7 @@ export function statusText(data: Delivery): string {
 
 export function registerUI(pi: ExtensionAPI) {
 	let mode = "enforce";
+	let showVerdicts = false;
 	const markers = new Set<string>();
 	const legacyHidden = new Set<string>();
 	const marked = (markdown: string) => [...markers].some((marker) => markdown.includes(marker));
@@ -52,7 +53,8 @@ export function registerUI(pi: ExtensionAPI) {
 		const content = new Container();
 		const data = entry.data;
 		if (!data) return content;
-		if (!quiet(data)) {
+		const showDetails = expanded || !quiet(data, showVerdicts);
+		if (showDetails) {
 			const color = data.delivery === "released" && data.audit?.status === "passed" && !data.audit.advisoryIncomplete && !experimentalCount(data) && !staleCalibrations(data) && !data.audit.catalogIssues?.length ? "muted" : "warning";
 			const lines = [`[${NAME}] ${statusText(data)}`];
 			if (data.audit?.error) lines.push(data.audit.error);
@@ -61,7 +63,10 @@ export function registerUI(pi: ExtensionAPI) {
 			if (expanded && data.debug) lines.push(JSON.stringify({ candidates: data.candidates, writerUsage: data.writerUsage }, null, 2));
 			content.addChild(new Text(theme.fg(color, lines.join("\n")), 1, 0));
 		}
-		if (data.reply !== undefined) { content.addChild(new Spacer(1)); content.addChild(new Markdown(data.reply, 1, 0, getMarkdownTheme())); }
+		if (data.reply !== undefined) {
+			if (showDetails) content.addChild(new Spacer(1));
+			content.addChild(new Markdown(data.reply, 1, 0, getMarkdownTheme()));
+		}
 		return content;
 	});
 	pi.registerEntryRenderer<LegacyCheck>(VERDICT, (entry, _options, theme) => {
@@ -73,23 +78,23 @@ export function registerUI(pi: ExtensionAPI) {
 		return content;
 	});
 	pi.registerMessageRenderer<string[]>(SKILLS, (message, { expanded }, theme) => new Text(theme.fg("muted", expanded && typeof message.content === "string" ? message.content : `[${NAME}] Preloaded ${(message.details ?? []).join(", ")}.`), 1, 0));
-	function status(data: Delivery, ctx: ExtensionContext) { ctx.ui.setStatus(NAME, data.mode !== mode ? `Mode: ${mode}` : quiet(data) ? undefined : statusText(data)); }
+	function clearStatus(ctx: ExtensionContext) { ctx.ui.setStatus(NAME, undefined); }
 	function restore(ctx: ExtensionContext) {
 		legacyHidden.clear();
-		let latest: Delivery | undefined;
 		for (const entry of ctx.sessionManager.getBranch()) {
 			if (entry.type !== "custom") continue;
 			if (entry.customType === DRAFT) for (const marker of (entry.data as { markers: string[] }).markers) markers.add(marker);
 			if (entry.customType === VERDICT) for (const hash of (entry.data as LegacyCheck)?.hidden ?? []) legacyHidden.add(hash);
-			if (entry.customType === RESULT) latest = entry.data as Delivery;
 		}
-		if (latest) status(latest, ctx);
-		else ctx.ui.setStatus(NAME, `Mode: ${mode}`);
+		clearStatus(ctx);
 	}
 	for (const event of ["session_start", "session_tree"] as const) pi.on(event, (_event, ctx) => restore(ctx));
+	pi.on("session_shutdown", (_event, ctx) => clearStatus(ctx));
 	return {
-		restore, status, messages,
-		mode: (next: string, ctx: ExtensionContext) => { mode = next; ctx.ui.setStatus(NAME, `Mode: ${mode}`); },
+		restore, messages,
+		configure: (config: Config) => { showVerdicts = config.showVerdicts; },
+		status: (_data: Delivery, ctx: ExtensionContext) => clearStatus(ctx),
+		mode: (next: string, ctx: ExtensionContext) => { mode = next; clearStatus(ctx); },
 		begin: (message: Extract<MessageEndEvent["message"], { role: "assistant" }>, snapshot: Config, ctx: ExtensionContext) => {
 			const owned: string[] = [];
 			const content = message.content.map((block) => {
@@ -102,7 +107,7 @@ export function registerUI(pi: ExtensionAPI) {
 			const text = textOf(message.content);
 			const draft = { schemaVersion: 2, id: randomUUID(), candidateHash: createHash("sha256").update(text).digest("hex"), markers: owned, text, mode: snapshot.mode, releasePolicy: snapshot.releasePolicy };
 			pi.appendEntry(DRAFT, draft);
-			ctx.ui.setStatus(NAME, "Checking final reply.");
+			ctx.ui.setStatus(NAME, "Reply guard: checking");
 			return { message: { ...message, content }, draft };
 		},
 	};
