@@ -38,7 +38,8 @@ function debugLines(result: Check, theme: Theme): string[] {
 
 export function statusText(result: Check): string {
 	const marks = result.verdicts.map((verdict) => `${verdict.name} ${verdict.error ? "err" : verdict.failed ? "\u2717" : "\u2713"}`);
-	return `${result.model.split("/").at(-1)}: ${marks.join(" \u00b7 ")} \u00b7 ${result.ms}ms`;
+	const status = result.status ?? (result.verdicts.some((verdict) => verdict.error) ? "incomplete" : result.verdicts.some((verdict) => verdict.failed) ? "failed" : "legacy unchecked");
+	return `${result.model.split("/").at(-1)}: ${status}${result.incomplete && status !== "incomplete" ? ", incomplete" : ""}${result.termination ? ` (${result.termination})` : ""} \u00b7 ${marks.join(" \u00b7 ")} \u00b7 ${Math.round(result.ms)}ms`;
 }
 
 export function registerUI(pi: ExtensionAPI, guarding: () => boolean) {
@@ -63,18 +64,19 @@ export function registerUI(pi: ExtensionAPI, guarding: () => boolean) {
 		const result = entry.data;
 		const content = new Container();
 		if (!result) return content;
-		if (result.showVerdicts === false || (result.verdicts.length === 0 && !result.trace?.length)) {
+		if (result.showVerdicts === false && result.status === "passed") {
 			if (result.reply) content.addChild(new Markdown(result.reply, 1, 0, getMarkdownTheme()));
 			return content;
 		}
 
 		const attempt = result.attempt !== undefined && result.attempt > 1 ? `attempt ${result.attempt} ` : "";
-		const header = `${theme.fg("customMessageLabel", `[${NAME}]`)} ${theme.fg("dim", `${attempt}${result.model} ${result.ms}ms`)}`;
+		const header = `${theme.fg("customMessageLabel", `[${NAME}]`)} ${theme.fg("dim", `${attempt}${statusText(result)}`)}`;
 		const lines = result.verdicts.flatMap((verdict) => [
 			`  ${verdictLine(verdict, theme)}`,
 			...(expanded && !result.trace ? rawLines(verdict, theme) : []),
 		]);
-		const bg = result.verdicts.some((verdict) => verdict.failed) ? "toolErrorBg" : "toolSuccessBg";
+		if (result.error) lines.unshift(theme.fg("warning", result.error));
+		const bg = result.status === "passed" ? "toolSuccessBg" : "toolErrorBg";
 		const box = new Box(1, 1, (text) => theme.bg(bg, text));
 		box.addChild(new Text([header, ...lines, ...(expanded ? debugLines(result, theme) : [])].join("\n"), 0, 0));
 		content.addChild(box);

@@ -2,7 +2,9 @@
 
 [![npm](https://img.shields.io/npm/v/pi-reply-guard)](https://www.npmjs.com/package/pi-reply-guard) [![Pi package](https://img.shields.io/badge/pi-package-blue)](https://pi.dev/packages/pi-reply-guard) [![Downloads](https://img.shields.io/npm/dm/pi-reply-guard)](https://www.npmjs.com/package/pi-reply-guard) [![Stars](https://img.shields.io/github/stars/amalavet/pi-reply-guard)](https://github.com/amalavet/pi-reply-guard/stargazers) [![License](https://img.shields.io/npm/l/pi-reply-guard)](LICENSE)
 
-Checks each agent reply against a list of skills. A classifier model (Jev by default) determines if the reply adheres to the skill on a scale of 0-1. If a reply does not adhere to the skill, the agent is prompted to edit their reply to adhere to the skill.
+This branch contains the first regression fixes for a maintained Unslop integration. Keep it uninstalled until the rule catalog, preservation checks, and text-only repair are complete. [Implementation status](docs/implementation.md) records the tested changes and remaining work.
+
+The current evaluator asks Jev whether each final reply complies with each configured skill. Its probability estimates the answer to that question. A low compliance probability requests a rewrite within the configured budget.
 
 https://github.com/user-attachments/assets/c8c65cf3-3030-44af-88e1-03f897d86447
 
@@ -20,34 +22,46 @@ pi install git:github.com/amalavet/pi-reply-guard
 
 ## Configure
 
-Run `/reply-guard` in Pi to open the settings menu. Select a setting to change it, or choose “Edit JSON” to edit the full configuration. Each change saves to `~/.pi/agent/reply-guard.json` and applies to the next reply:
+Run `/reply-guard` in Pi to open the settings menu. Select a setting to change it, or choose “Edit JSON” to edit the full configuration. Each change saves atomically to `~/.pi/agent/reply-guard.json`, backs up the previous bytes, and applies to the next request:
 
 ```json
 {
+  "schemaVersion": 1,
+  "thresholdMeaning": "compliance",
+  "auditDeadlineMs": 5000,
+  "classifierConcurrency": 2,
+  "maxClassifierRequests": 8,
+  "maxInputTokens": 64000,
   "skills": {
     "asd-ste100": 0.3,
     "i-have-adhd": 0.3,
     "my-reply-preferences": 0.3
   },
-  "model": "openrouter/typesafe/jev-1.13",
+  "model": "openrouter/typesafe/jev-1.14",
   "maxRewrites": 2,
   "inject": false,
   "reinjectBelow": 0,
-  "preload": true,
+  "preload": false,
   "debug": false,
   "showVerdicts": true
 }
 ```
 
-Install the skills separately. Names must match installed skills. No skills are bundled or enabled by default. Missing or unreadable skills are skipped.
+Install the skills separately. Names must match installed skills. Missing, unreadable, empty, or unconfigured skills produce an incomplete audit with a configuration diagnostic. Invalid configuration leaves the existing file unchanged.
+
+Unversioned upstream settings retain their compliance thresholds, default model (`openrouter/typesafe/jev-1.13`), and preload preference. Saving through `/reply-guard` writes schema version 1 and creates a private `.bak` beside the configuration. Version 1 does not accept violation thresholds. The per-rule catalog will use a separate schema.
 
 | Key | Default | Meaning |
 |---|---|---|
 | `skills` | `{}` | Installed skill name that replies must adhere to, with a threshold (0-1) to pass. A reply passes when the probability that it meets the skill is at or above the threshold |
-| `model` | `openrouter/typesafe/jev-1.13` | Classifier model, `provider/id` |
-| `maxRewrites` | `2` | How many times the agent will attempt to rewrite its response to match the spec. When this is exceeded, the final reply will be given even if it does not pass the guard. |
+| `model` | `openrouter/typesafe/jev-1.14` | Classifier model, `provider/id`. Existing selections are retained. |
+| `maxRewrites` | `2` | Additional writer generations. The original and both revisions receive an audit attempt. Zero still audits the original. Exhaustion releases the current reply with a failed or incomplete status. |
+| `auditDeadlineMs` | `5000` | Overall audit deadline per candidate, including provider work. |
+| `classifierConcurrency` | `2` | Maximum concurrent classifier requests. |
+| `maxClassifierRequests` | `8` | Request limit per candidate. Native SDK retries are disabled. |
+| `maxInputTokens` | `64000` | Cumulative conservative input budget. UTF-8 bytes plus 256 tokens of overhead bound each request. Oversized input is reported incomplete without truncation. |
 | `inject` | `false` | Set to `true` to add the full text of the failed skills to each rewrite request. |
 | `reinjectBelow` | `0` | Adds the full text of a failed skill to the rewrite request when its probability is below this value (0-1). `0` disables it. `inject: true` takes precedence. |
-| `preload` | `true` | Adds the full text of the guarded skills to the context once, at the first prompt of each session. |
-| `debug` | `false` | When this is enabled, you can view the raw requests to jev, the prompts to the agent, and the failed replies. |
-| `showVerdicts` | `true` | By default the guard will show a block containing a short result of the reply guard. You can set this to hide that block. |
+| `preload` | `false` | Adds the full text of the guarded skills to the context once. Leave disabled when an existing loader supplies the skill. |
+| `debug` | `false` | Records structured lifecycle events, hashes, and verdicts. New traces omit raw provider payloads, tool arguments, and draft text. |
+| `showVerdicts` | `true` | Shows the audit result. Disabling this hides successful checks. Failures and incomplete checks remain visible. |

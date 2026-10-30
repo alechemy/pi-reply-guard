@@ -1,13 +1,24 @@
-import { writeFileSync } from "node:fs";
+import { readFileSync } from "node:fs";
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
-import { CONFIG_PATH, NAME, loadConfig, parseConfig } from "./config.js";
+import { CONFIG_PATH, DEFAULTS, NAME, parseConfig, saveConfig } from "./config.js";
 
 export function registerConfigCommand(pi: ExtensionAPI) {
 	pi.registerCommand(NAME, {
 		description: "Edit reply guard skills, thresholds, model, and display settings",
 		handler: async (_args, ctx) => {
 			if (!ctx.hasUI) return;
-			let config = loadConfig();
+			let original: string | undefined;
+			let config;
+			try {
+				original = readFileSync(CONFIG_PATH, "utf8");
+				config = parseConfig(original);
+			} catch (error) {
+				if ((error as NodeJS.ErrnoException).code === "ENOENT") config = { ...DEFAULTS, skills: {} };
+				else {
+					ctx.ui.notify(`Cannot load ${CONFIG_PATH}. Repair the file before editing settings. Existing bytes were preserved.`, "error");
+					return;
+				}
+			}
 			while (true) {
 				const options = [
 					`Skills and thresholds (${Object.keys(config.skills).length})`,
@@ -74,9 +85,10 @@ export function registerConfigCommand(pi: ExtensionAPI) {
 						}
 					}
 					const validated = parseConfig(JSON.stringify(next));
-					writeFileSync(CONFIG_PATH, `${JSON.stringify(validated, null, 2)}\n`);
+					const backup = saveConfig(validated, original);
+					original = `${JSON.stringify(validated, null, 2)}\n`;
 					config = validated;
-					ctx.ui.notify("Reply guard settings saved. They apply to the next reply.", "info");
+					ctx.ui.notify(`Reply guard settings saved for the next request.${backup ? ` Previous settings: ${backup}` : ""}`, "info");
 				} catch (error) {
 					ctx.ui.notify(error instanceof Error ? error.message : String(error), "error");
 				}
