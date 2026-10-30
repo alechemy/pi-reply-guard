@@ -2,7 +2,7 @@
 
 This branch contains the upstream regression fixes, the complete rule catalog, bounded per-rule evaluation, and the integrated preservation-checked repair engine. The catalog covers all 36 rules with 46 checks and 138 synthetic examples. [Rule catalog and Markdown checks](rules.md) documents source protection and local auditing. [Per-rule evaluation](evaluation.md) covers Jev execution and diagnostics. [Preservation and isolated repair](repair.md) covers acceptance checks, writer isolation, and canonical context.
 
-The package entry point now uses the new lifecycle with off, observe, and enforce modes, warning and strict policies, and recoverable withheld drafts. [Delivery and operating modes](delivery.md) covers terminal rendering and integration metadata. Managed installation and live Jev verification have not been performed.
+The package entry point now uses the new lifecycle with off, observe, and enforce modes, warning and strict policies, and recoverable withheld drafts. [Delivery and operating modes](delivery.md) covers terminal rendering and integration metadata. The fork is published and installed at `d3d3a31c8b5dfa5b5099758ad644f148064b57a8`. A live test exposed a served-model identity mismatch. The corrected source passes the authenticated smoke test. The installed revision is disabled pending publication of that correction. See [deployment verification](deployment.md).
 
 ## Source baseline
 
@@ -66,7 +66,7 @@ PI_PACKAGE_ROOT="$(brew --prefix pi-coding-agent)/libexec/lib/node_modules/@eare
 
 Tests block network access, use a disposable HOME, and provide deterministic classifiers and writers. `test/regressions.mjs` exercises the loaded extension's configuration and cancellation paths through the SDK. `test/sdk.mjs` runs real Pi settlement, context reconstruction, and native message rendering with synthetic writer and classifier responses. The initial tests reproduced skipped final audits and false-success error handling before the fixes.
 
-These tests establish control flow. Jev's writing judgments and repair preservation remain uncalibrated. Live calls belong after the offline guard and installation are complete.
+These tests establish control flow. Jev's writing judgments and repair preservation remain uncalibrated. The [live synthetic smoke test](deployment.md) establishes authenticated auditing, repair, and cancellation for the corrected source.
 
 ## Per-rule evaluation checkpoint
 
@@ -104,6 +104,6 @@ The house semantic checks remain advisory. No held-out human corpus has been eva
 
 ## Remaining implementation
 
-Finish fork publication, immutable package registration, idempotent Stow integration, deployment configuration, and rollback. Test the chosen authenticated Jev route with a bounded synthetic smoke test and record served versions, latency, and usage.
+Publish the verified served-model identity correction, update the managed package pin, and reload Pi with enforce mode enabled. Fork publication, initial installation, configuration seeding, Stow links, and persistent off-mode rollback are complete. The supported host version is Pi 1.4.0.
 
-A final supported Pi range and an installed revision must be recorded after these stages pass. The current branch is a development checkpoint.
+Semantic calibration remains separate from deployment. The 44 semantic checks remain advisory until their reviewed held-out evidence meets the promotion policy.

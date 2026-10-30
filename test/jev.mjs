@@ -29,7 +29,7 @@ const context = { state: { text: "Fictional text." }, questions: {
   second: { type: "bool", instructions: "Does another violation occur?", criteria: { true: "Violation", false: "No violation" } },
 } };
 const options = () => ({ signal: new AbortController().signal, timeoutMs: 1000, maxRequestBytes: 64000 });
-const valid = () => ({ model: "typesafe/jev-1.14", answers: { first: { type: "noul", noul: 0.95 }, second: { type: "noul", noul: 0 } }, usage: { input_tokens: 25, output_tokens: 2 } });
+const valid = () => ({ model: "typesafe/jev-1.14-20261014", answers: { first: { type: "noul", noul: 0.95 }, second: { type: "noul", noul: 0 } }, usage: { input_tokens: 25, output_tokens: 2 } });
 
 function transport(body, status = 200) {
   let calls = 0;
@@ -52,7 +52,8 @@ test("installed Pi native System One transport", async (t) => {
     const f = transport(valid());
     const result = await f.adapter.classify(context, options());
     assert.equal(f.adapter.available, true);
-    assert.equal(result.servedModel, "typesafe/jev-1.14");
+    assert.equal(result.servedModel, "typesafe/jev-1.14-20261014");
+    assert.equal(f.adapter.identity.model, result.servedModel);
     assert.deepEqual(result.answers.first, { type: "bool", probability: 0.95 });
     assert.equal(result.attempts, 1);
     assert.equal(result.usage.input, 25);
@@ -77,7 +78,7 @@ test("installed Pi native System One transport", async (t) => {
     const result = await transport(extra).adapter.classify(context, options());
     assert.match(result.protocolIssue, /Unexpected/);
     assert.equal(result.answers.first.probability, 0.95);
-    for (const model of [undefined, "jev-latest", "typesafe/jev-1.13"]) {
+    for (const model of [undefined, "jev-latest", "typesafe/jev-1.13", "typesafe/jev-1.14", "typesafe/jev-1.14-20261015"]) {
       const body = { ...valid(), model };
       const invalid = await transport(body).adapter.classify(context, options());
       assert.deepEqual(invalid.answers, {});
@@ -148,7 +149,7 @@ test("installed Pi native System One transport", async (t) => {
     const fetch = async (_url, init) => {
       calls++;
       const body = JSON.parse(init.body);
-      return new Response(JSON.stringify({ model: body.model, answers: Object.fromEntries(Object.keys(body.questions).map((id) => [id, { type: "noul", noul: 0 }])) }));
+      return new Response(JSON.stringify({ model: "typesafe/jev-1.14-20261014", answers: Object.fromEntries(Object.keys(body.questions).map((id) => [id, { type: "noul", noul: 0 }])) }));
     };
     const result = await main(["audit", ...flags], { registry, fetch });
     assert.equal(result.code, 0);
@@ -178,14 +179,14 @@ test("installed Pi native System One transport", async (t) => {
     const fetch = async (_url, init) => {
       assert.equal(new Headers(init.headers).get("authorization"), "Bearer fictional-test-key");
       const body = JSON.parse(init.body);
-      return new Response(JSON.stringify({ model: body.model, answers: Object.fromEntries(Object.keys(body.questions).map((id) => [id, { type: "noul", noul: 0 }])) }));
+      return new Response(JSON.stringify({ model: "typesafe/jev-1.14-20261014", answers: Object.fromEntries(Object.keys(body.questions).map((id) => [id, { type: "noul", noul: 0 }])) }));
     };
     const result = await main(["evaluate-corpus", ...Object.entries(files).flatMap(([key, path]) => [`--${key}`, path]), "--split", "development", "--allow-remote", "yes", "--writer-model", "fixture/writer-1"], { registry: models, fetch });
     assert.equal(result.code, 0);
     assert.equal(writes, 1);
     const evaluation = JSON.parse(readFileSync(files.output, "utf8"));
     assert.equal(evaluation.execution, "provider");
-    assert.equal(evaluation.model.model, "typesafe/jev-1.14");
+    assert.equal(evaluation.model.model, "typesafe/jev-1.14-20261014");
     assert.equal(evaluation.rows[0].repair.acceptedByAudit, true);
     assert.doesNotMatch(JSON.stringify(evaluation), /fictional-test-key|A fixture reply|A fixture—reply/);
     const drafts = JSON.parse(readFileSync(files["repair-drafts"], "utf8"));
@@ -193,12 +194,12 @@ test("installed Pi native System One transport", async (t) => {
     assert.equal(drafts[0].review.basis, "unreviewed");
   });
   await t.test("complete evaluator runs all rules through the real registry and adapter", async () => {
-    const f = transport((request) => ({ model: request.model, usage: { input_tokens: 100, output_tokens: 20 }, answers: Object.fromEntries(Object.keys(request.questions).map((id) => [id, { type: "noul", noul: id === "fictional-9" ? 1 : 0 }])) }));
+    const f = transport((request) => ({ model: "typesafe/jev-1.14-20261014", usage: { input_tokens: 100, output_tokens: 20 }, answers: Object.fromEntries(Object.keys(request.questions).map((id) => [id, { type: "noul", noul: id === "fictional-9" ? 1 : 0 }])) }));
     const result = await auditCandidate({ catalog: inspectCatalog(makeCatalog(), skill), text: "Fictional response.", request: "Write a response.", adapter: f.adapter });
     assert.equal(result.coverageComplete, true);
     assert.equal(result.requests, 1);
     assert.equal(result.transportAttempts, 1);
     assert.equal(result.checks.find((check) => check.id === "fictional-9").outcome, "violation");
-    assert.deepEqual(result.servedModels, ["typesafe/jev-1.14"]);
+    assert.deepEqual(result.servedModels, ["typesafe/jev-1.14-20261014"]);
   });
 });

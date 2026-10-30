@@ -30,7 +30,7 @@ export const good = "Retain the log for 2 hours.";
 export const bad = "Retain the log for 2 minutes.";
 export const assistantText = (messages) => messages.filter((message) => message.role === "assistant").map((message) => message.content.filter((block) => block.type === "text").map((block) => block.text).join("\n"));
 export function answer(body) {
-  return { model: body.model, answers: Object.fromEntries(Object.keys(body.questions).map((id) => [id, { type: "noul", noul: id === "preserve-quantities" && body.state.revision === bad ? 1 : 0 }])) };
+  return { model: "typesafe/jev-1.14-20261014", answers: Object.fromEntries(Object.keys(body.questions).map((id) => [id, { type: "noul", noul: id === "preserve-quantities" && body.state.revision === bad ? 1 : 0 }])) };
 }
 
 export async function setup({ config = {}, configText, catalog = makeCatalog(), skillText = skill, missingSkill = false, text = original, replies = [good], classify = answer, priorManager, beforeBoundary, afterBoundary, onInput, mainReplies, onMain } = {}) {

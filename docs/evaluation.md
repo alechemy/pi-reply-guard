@@ -28,7 +28,7 @@ Optional inputs:
 
 Exit code 0 means active checks passed and evaluation coverage is complete. Advisory violations can still be present. Code 1 means an active violation was found. Code 2 means checking was incomplete or an input failed validation. Inspect `advisoryIncomplete` and `coverageComplete` even when active checks pass. The existing `audit-local`, `check-catalog`, and `coverage` commands remain network-free.
 
-The authenticated smoke test belongs after installation. Current verification uses synthetic input and intercepted transport responses.
+The authenticated smoke test uses a synthetic reply through the configured OpenRouter credential. [Deployment verification](deployment.md) records its model identity, latency, usage, repair, and cancellation results.
 
 ## Coverage and evidence
 
@@ -59,7 +59,7 @@ The deadline starts before Markdown parsing and local checks. Scheduling stops w
 
 Native transport retries are disabled. The adapter permits one fetch per reserved request, verifies the planned URL and payload, and refuses redirects. Authentication and provider configuration remain Pi's responsibility. `requests` counts reservations, including failures before transport. `transportAttempts` counts calls reaching the fetch boundary. Usage is `null` when unavailable. A missing or all-zero catalog price produces unknown cost.
 
-`lib/jev.mjs` uses the public fetch option tested on Pi 1.4.0. It observes the native response's parsed JSON without changing that response. This retains valid answers when Pi rejects another answer in the batch. It also checks the wire response's served model instead of relying on Pi's result field, which echoes the requested model. Public questions and results use `bool` and `probability`. Wire answers use `noul`.
+`lib/jev.mjs` uses the public fetch option tested on Pi 1.4.0. It observes the native response's parsed JSON without changing that response. This retains valid answers when Pi rejects another answer in the batch. It checks the wire response against the reviewed served identity `typesafe/jev-1.14-20261014`. OpenRouter accepts the request ID `typesafe/jev-1.14` and returns that dated model name. The adapter snapshot, cache keys, and calibration records bind to the dated identity. A different build or an echoed request alias remains incomplete. Pi's result field echoes the requested ID, so it cannot establish the served version. Public questions and results use `bool` and `probability`. Wire answers use `noul`.
 
 ## Cache and integration
 
