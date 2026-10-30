@@ -1,8 +1,8 @@
 # Implementation status
 
-This branch contains the upstream regression fixes, the complete rule catalog, and bounded per-rule evaluation. The catalog covers all 36 rules with 46 checks and 138 synthetic examples. [Rule catalog and Markdown checks](rules.md) documents source protection and local auditing. [Per-rule evaluation](evaluation.md) documents native Jev execution, chunk coverage, caching, and the diagnostic CLI.
+This branch contains the upstream regression fixes, the complete rule catalog, bounded per-rule evaluation, and the preservation-checked repair engine. The catalog covers all 36 rules with 46 checks and 138 synthetic examples. [Rule catalog and Markdown checks](rules.md) documents source protection and local auditing. [Per-rule evaluation](evaluation.md) covers Jev execution and diagnostics. [Preservation and isolated repair](repair.md) covers acceptance checks, writer isolation, and canonical context.
 
-Keep the extension uninstalled until preservation, text-only repair, and delivery-state handling are implemented. The new evaluator is available through `auditCandidate()` and `node cli.mjs audit`. The Pi entry point still uses whole-skill compliance questions and main-agent continuations.
+Keep the extension uninstalled until operating modes and terminal delivery policies are integrated. The new repair lifecycle is tested against Pi 1.4.0 but is not yet registered by the package entry point, which still uses the legacy implementation.
 
 ## Source baseline
 
@@ -39,7 +39,7 @@ The existing Unslop loader supplies a request-local reminder and restores the fu
 
 Schema version 1 explicitly retains upstream compliance probabilities. Its settings are an intermediate migration format. Per-rule violation probabilities require a separate schema and explicit migration.
 
-The terminal renderer still conceals drafts using display transformations. Those drafts remain in raw session history, provider context, JSON events, RPC streams, and exports. This checkpoint does not provide strict concealment or a preservation-checked fallback.
+The legacy terminal renderer conceals drafts using display transformations. Drafts remain in raw session history, provider context, JSON events, RPC streams, and exports. Strict release policies and rendering for the new preservation-checked fallback are pending.
 
 ## Pi API constraints for the next stage
 
@@ -47,7 +47,7 @@ The installed declarations and implementation were inspected in addition to the 
 
 1. Use `ctx.sessionManager.buildSessionProjection()` for accepted context. It is in the public read-only interface. Upstream used `buildSessionContext()`, which is absent from that interface in Pi 1.4.0.
 2. `message_end` may replace a message of the same role. `agent_before_settle` may append `context_edit` entries. Preserve other extensions' boundary entries and their continuation decisions.
-3. Use an isolated writer completion with the selected writer model and applicable generation settings. Main-agent tool declarations do not restrict every callable tool, and a blocked call can cause another internal agent turn. The replacement writer must have no tool executor or continuation loop.
+3. Use `ctx.modelRegistry.streamSimple(...).result()` for isolated provider-neutral writer calls. `completeSimple()` belongs to `ModelRuntime` and is absent from the extension registry. Main-agent tool declarations do not restrict every callable tool, and a blocked call can cause another internal agent turn. The isolated writer has no tool executor or continuation loop.
 4. Persist accepted replacements through a context edit against the original assistant entry. The raw entry and usage remain intact. Record isolated writer usage separately and test reconstruction on resume and the next user turn.
 5. Pi's System One transport defaults to two retries. Explicit `maxRetries: 0` is necessary when the extension owns the request budget.
 6. Pi 1.4.0's System One answer parser discards the whole batch when one answer is malformed. Its returned model field also copies the requested model ID. The new adapter uses Pi's public fetch option to retain valid partial answers and check the served identity. Installed-SDK tests verify the hook, authentication forwarding, and retry suppression.
@@ -75,13 +75,20 @@ The adapter verifies served model identity and retains valid partial answers thr
 
 An offline check of the actual 44-question house catalog completed in three batches with 55,331 conservatively estimated input tokens for a short synthetic reply containing a heading and list. This demonstrates planning within the default budget. It does not measure Jev latency, billed usage, or writing accuracy.
 
+## Preservation and repair checkpoint
+
+Revisions now require literal preservation and nine semantic preservation conditions. They share the candidate audit budget with style checks. Intermediate preservation probabilities are inconclusive and reject the revision. The engine keeps the original meaning reference throughout the bounded repair loop and selects the latest preserved candidate with its own verdict.
+
+The isolated writer uses the selected model and applicable generation settings. Registered mock tools remain unexecuted across direct, deferred, and codemode tool-call attempts. Writer failures and cancellation stop without an internal agent continuation.
+
+`registerRepairLifecycle()` implements the Pi event integration. `repairBoundary()` persists the selected reply through a context edit while retaining the raw original and its usage. Installed-SDK tests verify the accepted text on the next turn and after resume. The package entry point will adopt this lifecycle when delivery policies and rendering are ready.
+
 ## Remaining implementation
 
 Continue in this order:
 
-1. Add mandatory semantic and literal preservation checks against the original draft. Add the isolated writer, its deadline and bounded attempts, and mock-tool isolation tests. Replace the legacy lifecycle evaluator with `auditCandidate()` using one catalog, adapter, and cache snapshot per repair session.
-2. Implement off, observe, and enforce modes, warning and strict release policies, explicit draft recovery, canonical fallback context, and resumed-session rendering.
-3. Extend the catalog's synthetic examples with a separate semantic-preservation fixture set, corpus import, held-out evaluation, and reviewable promotion records. Prioritize semantic calibration for rules 9, 25, 34, and 35.
-4. Finish fork publication, immutable package registration, idempotent Stow integration, configuration migration, and rollback. Test the chosen authenticated Jev route with a bounded synthetic smoke test and record served versions, latency, and usage.
+1. Implement off, observe, and enforce modes, warning and strict release policies, explicit draft recovery, and resumed-session rendering. Replace the package entry point's legacy lifecycle with `registerRepairLifecycle()` and a versioned configuration loader.
+2. Add corpus import, held-out evaluation, and reviewable promotion records. The synthetic preservation fixtures are implemented. Prioritize semantic style calibration for rules 9, 25, 34, and 35, and evaluate preservation separately.
+3. Finish fork publication, immutable package registration, idempotent Stow integration, configuration migration, and rollback. Test the chosen authenticated Jev route with a bounded synthetic smoke test and record served versions, latency, and usage.
 
 A final supported Pi range and an installed revision must be recorded after these stages pass. The current branch is a development checkpoint.
