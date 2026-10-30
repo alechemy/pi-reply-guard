@@ -1,8 +1,8 @@
 # Implementation status
 
-This branch contains the upstream regression fixes and the offline rule-catalog phase of the Unslop reply guard. The catalog covers all 36 rules with 46 checks and 138 synthetic examples. Positioned Markdown parsing, protected-content comparisons, local checks, and semantic request planning are implemented. [Rule catalog and Markdown checks](rules.md) documents the files and commands.
+This branch contains the upstream regression fixes, the complete rule catalog, and bounded per-rule evaluation. The catalog covers all 36 rules with 46 checks and 138 synthetic examples. [Rule catalog and Markdown checks](rules.md) documents source protection and local auditing. [Per-rule evaluation](evaluation.md) documents native Jev execution, chunk coverage, caching, and the diagnostic CLI.
 
-Keep the extension uninstalled until preservation, text-only repair, and delivery-state handling are implemented. The current Pi entry point still uses whole-skill compliance questions and main-agent continuations.
+Keep the extension uninstalled until preservation, text-only repair, and delivery-state handling are implemented. The new evaluator is available through `auditCandidate()` and `node cli.mjs audit`. The Pi entry point still uses whole-skill compliance questions and main-agent continuations.
 
 ## Source baseline
 
@@ -50,7 +50,7 @@ The installed declarations and implementation were inspected in addition to the 
 3. Use an isolated writer completion with the selected writer model and applicable generation settings. Main-agent tool declarations do not restrict every callable tool, and a blocked call can cause another internal agent turn. The replacement writer must have no tool executor or continuation loop.
 4. Persist accepted replacements through a context edit against the original assistant entry. The raw entry and usage remain intact. Record isolated writer usage separately and test reconstruction on resume and the next user turn.
 5. Pi's System One transport defaults to two retries. Explicit `maxRetries: 0` is necessary when the extension owns the request budget.
-6. Pi 1.4.0's System One answer parser discards the whole batch when one answer is malformed. Its returned model field also copies the requested model ID. The per-rule adapter must retain valid partial answers and inspect the served model identity without logging credentials. Verify a narrowly scoped native transport hook before implementing that adapter.
+6. Pi 1.4.0's System One answer parser discards the whole batch when one answer is malformed. Its returned model field also copies the requested model ID. The new adapter uses Pi's public fetch option to retain valid partial answers and check the served identity. Installed-SDK tests verify the hook, authentication forwarding, and retry suppression.
 7. Pi converts public `bool` questions to wire-level `noul` and converts `noul` answers to `probability`. Keep these contracts separate.
 
 The MIT license and upstream author attribution remain intact. The local `upstream` remote points to the original repository.
@@ -67,14 +67,21 @@ Tests block network access, use a disposable HOME, and provide deterministic cla
 
 These tests establish control flow. Jev's writing judgments and repair preservation remain uncalibrated. Live calls belong after the offline guard and installation are complete.
 
+## Per-rule evaluation checkpoint
+
+The evaluator now runs every applicable semantic question, groups shared state, and tracks exact evaluated and omitted ranges. Passage checks use overlapping chunks. Broader checks remain incomplete when the exact full context cannot fit. Local violations survive remote failures. Structured findings use fixed guidance and source quotations labeled as evaluated ranges.
+
+The adapter verifies served model identity and retains valid partial answers through Pi's native transport. Deadlines, request limits, concurrency, and input reservations apply across each candidate audit. The bounded memory cache stores probabilities and hashes without prose. CLI audits reuse Pi authentication and never create an agent session.
+
+An offline check of the actual 44-question house catalog completed in three batches with 55,331 conservatively estimated input tokens for a short synthetic reply containing a heading and list. This demonstrates planning within the default budget. It does not measure Jev latency, billed usage, or writing accuracy.
+
 ## Remaining implementation
 
 Continue in this order:
 
-1. Connect the completed catalog and Markdown view to per-rule evaluation. Replace whole-skill questions with narrow per-rule questions, full-response chunk coverage, structured evidence, and versioned cache keys. Start semantic style checks as advisory. Preserve active local findings when remote checks fail.
-2. Add mandatory semantic and literal preservation checks against the original draft. Add the isolated writer, its deadline and bounded attempts, and mock-tool isolation tests.
-3. Implement off, observe, and enforce modes, warning and strict release policies, explicit draft recovery, canonical fallback context, and resumed-session rendering.
-4. Extend the catalog's synthetic examples with a separate semantic-preservation fixture set, corpus import, held-out evaluation, and reviewable promotion records. Prioritize semantic calibration for rules 9, 25, 34, and 35.
-5. Finish fork publication, immutable package registration, idempotent Stow integration, configuration migration, and rollback. Test the chosen authenticated Jev route with a bounded synthetic smoke test and record served versions, latency, and usage.
+1. Add mandatory semantic and literal preservation checks against the original draft. Add the isolated writer, its deadline and bounded attempts, and mock-tool isolation tests. Replace the legacy lifecycle evaluator with `auditCandidate()` using one catalog, adapter, and cache snapshot per repair session.
+2. Implement off, observe, and enforce modes, warning and strict release policies, explicit draft recovery, canonical fallback context, and resumed-session rendering.
+3. Extend the catalog's synthetic examples with a separate semantic-preservation fixture set, corpus import, held-out evaluation, and reviewable promotion records. Prioritize semantic calibration for rules 9, 25, 34, and 35.
+4. Finish fork publication, immutable package registration, idempotent Stow integration, configuration migration, and rollback. Test the chosen authenticated Jev route with a bounded synthetic smoke test and record served versions, latency, and usage.
 
 A final supported Pi range and an installed revision must be recorded after these stages pass. The current branch is a development checkpoint.

@@ -39,6 +39,8 @@ test("CLI rejects invalid arguments and malformed JSON with useful diagnostics",
   await assert.rejects(main(["unknown"]), /Usage:/);
   await assert.rejects(main(["coverage", "--skill", "a"]), /Both/);
   await assert.rejects(main(["coverage", "--skill", "a", "--skill", "b"]), /repeated/);
+  await assert.rejects(main(["audit", "--catalog", "a", "--skill", "b"]), /requires --request/);
+  await assert.rejects(main(["audit-local", "--model", "provider/model"]), /require the audit command/);
   const result = spawnSync(process.execPath, [new URL("../cli.mjs", import.meta.url).pathname, "unknown"], { encoding: "utf8" });
   assert.equal(result.status, 2);
   assert.match(result.stderr, /Usage:/);

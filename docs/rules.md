@@ -2,7 +2,7 @@
 
 The catalog maps all 36 Unslop rules to 46 checks. The two literal predicates are active for eligible prose. The 44 semantic questions are advisory, with an experimental violation threshold of 0.9. The catalog contains 138 synthetic examples. None establishes calibration accuracy.
 
-This phase provides offline checks and semantic request plans. The Pi entry point still uses the legacy whole-skill evaluator. Per-rule Jev execution and repair integration are the next phase.
+The catalog feeds the [per-rule evaluator](evaluation.md), which provides bounded Jev execution and diagnostic auditing. The Pi entry point still uses the legacy whole-skill evaluator until preservation and isolated repair are integrated.
 
 ## Files
 
@@ -15,7 +15,10 @@ This phase provides offline checks and semantic request plans. The Pi entry poin
 | `lib/catalog.mjs` | Schema validation, source drift detection, and coverage rendering. |
 | `lib/markdown.mjs` | Positioned Markdown parsing, protection map, and literal preservation comparison. |
 | `lib/local-checks.mjs` | Literal evaluation and typed semantic plans. |
-| `cli.mjs` | Network-free inspection and diagnostic auditing. |
+| `lib/evaluator.mjs` | Per-rule execution, chunk coverage, budgets, and structured findings. |
+| `lib/jev.mjs` | Native Pi classifier adapter with partial-answer and served-model validation. |
+| `lib/judgment-cache.mjs` | Bounded in-memory judgments keyed by versioned hashes. |
+| `cli.mjs` | Network-free catalog inspection and local audits, plus explicit remote diagnostic audits. |
 
 Source, ruleset, preprocessing, detector, and protection metadata are shared in the JSON document. `loadCatalog()` resolves those fields onto every check. Each resolved check also carries a definition digest covering its question, exceptions, threshold, examples, and source binding.
 
@@ -78,4 +81,4 @@ Check the actual Stow catalog and its generated report:
 REPLY_GUARD_ROOT="$PWD" node --test "$HOME/.dotfiles/scripts/tests/test_pi_reply_guard_catalog.mjs"
 ```
 
-The tests cover source drift, all source-rule mappings, local examples, all semantic example plans, Markdown source positions, protected content, wrapper evasion, and response endings beyond 16,000 characters. Semantic examples test planning and schema behavior. Live judgments and held-out accuracy require the later evaluator and calibration stages.
+The tests cover source drift, all source-rule mappings, local examples, all semantic example plans, Markdown source positions, protected content, wrapper evasion, and response endings beyond 16,000 characters. Semantic examples test planning and schema behavior. [Evaluator tests](evaluation.md#focused-verification) exercise native transport and coverage with synthetic responses. Live judgments and held-out accuracy require the installation and calibration stages.
