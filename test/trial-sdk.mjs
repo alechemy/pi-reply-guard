@@ -46,7 +46,7 @@ test("experimental semantic trial through the native Pi package", async (t) => {
       assert.equal(data.candidates[0].audit.checks.filter((check) => check.experimental).length, 2);
       assert.equal(data.candidates[1].preserved, reply === good);
       assert.ok(data.audit.checks.filter((check) => check.experimental).every((check) => check.calibration.state === "uncalibrated"));
-      if (reply === good) assert.doesNotMatch(f.render(), /\[reply-guard\]/);
+      if (reply === good) assert.match(f.render(300), /1 rewrite attempt.*rewritten reply released \(passed\)/);
       else assert.match(f.render(240), /2 experimental active \(uncalibrated\)/);
       assert.match(f.render(240, true, true), /2 experimental active \(uncalibrated\)/);
       assert.deepEqual(assistantText(f.sessionManager.buildSessionProjection().messages), [expected]);
