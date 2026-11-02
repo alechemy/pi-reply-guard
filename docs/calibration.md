@@ -15,7 +15,7 @@ Import only files the operator supplies or explicitly authorizes. Keep submissio
 
 Examples used to develop a question belong in `development`. Reserve `held-out` examples before tuning questions or thresholds. Keep an original and its corrections in the same group and split. The importer rejects duplicate samples, groups spanning splits, and repeated prose crossing splits. Held-out evaluation also rejects prose copied from catalog development examples. These checks cannot detect every paraphrase or prior use of an example. The operator must retain the split's independence across dataset versions.
 
-Prioritize rules 9, 25, 34, and 35. Label individual check IDs, such as `formulaic-contrast` and `redundant-negative-clarification`. An accepted reply establishes only the labels explicitly supplied for it.
+Prioritize rules 9, 25, 34, and 35. Label individual check IDs, such as `formulaic-contrast` and `unnecessary-qualification`. An accepted reply establishes only the labels explicitly supplied for it.
 
 ## Prepare a corpus
 
@@ -39,7 +39,7 @@ Submissions may be a JSON array or one JSON record per line. This fictional deve
   "reply": "The timer runs hourly. It runs hourly, not daily.",
   "labels": {
     "formulaic-contrast": "violation",
-    "redundant-negative-clarification": "violation"
+    "unnecessary-qualification": "violation"
   },
   "review": {"basis": "synthetic"}
 }

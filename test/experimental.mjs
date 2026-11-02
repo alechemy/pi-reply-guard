@@ -17,6 +17,33 @@ test("experimental opt-in is limited to the two named semantic checks", () => {
   assert.throws(() => withExperimentalChecks(inspectCatalog(makeCatalog(), skill), EXPERIMENTAL_CHECKS), /missing/);
 });
 
+test("qualification rename accepts legacy settings and catalogs without duplicating enforcement", () => {
+  const oldId = "redundant-negative-clarification";
+  const newId = "unnecessary-qualification";
+  assert.deepEqual(EXPERIMENTAL_CHECKS, ["formulaic-contrast", newId]);
+  assert.deepEqual(validateExperimentalChecks([oldId]), [newId]);
+  assert.throws(() => validateExperimentalChecks([oldId, newId]), /unique IDs/);
+  for (const catalogId of [oldId, newId]) {
+    const input = makeTrialCatalog();
+    const check = input.checks.find((check) => check.id === newId);
+    check.id = catalogId;
+    check.calibration.threshold = 0.6;
+    const parsed = inspectCatalog(input, skill);
+    for (const selectedId of [oldId, newId]) {
+      const active = withExperimentalChecks(parsed, [selectedId]).checks.filter((check) => check.experimental);
+      assert.equal(active.length, 1);
+      assert.equal(active[0].id, catalogId);
+      assert.equal(active[0].status, "active");
+      assert.equal(active[0].calibration.threshold, 0.6);
+      assert.equal(active[0].calibration.state, "uncalibrated");
+      assert.equal(withExperimentalChecks(parsed, []).checks.some((check) => check.experimental), false);
+    }
+  }
+  const duplicate = makeTrialCatalog();
+  duplicate.checks.push({ ...duplicate.checks.find((check) => check.id === newId), id: oldId });
+  assert.throws(() => withExperimentalChecks(inspectCatalog(duplicate, skill), [newId]), /duplicate aliases/);
+});
+
 test("the runtime opt-in preserves the catalog and its uncalibrated evidence", () => {
   assert.equal(withExperimentalChecks(catalog), catalog);
   const before = JSON.stringify(catalog);

@@ -3,7 +3,7 @@
 The trial lets two uncalibrated checks trigger repairs:
 
 - `formulaic-contrast`
-- `redundant-negative-clarification`
+- `unnecessary-qualification`
 
 After installing a revision containing the trial commands, run `/reload`, then `/reply-guard trial on`. Run `/reply-guard status` to inspect the selected checks and `/reply-guard coverage` to see their effective dispositions. Repairs require enforce mode. The trial command preserves the current mode and release policy.
 
@@ -11,11 +11,13 @@ Run `/reply-guard trial off` to remove the experimental opt-in. This retains the
 
 ## Settings and safeguards
 
-The live configuration stores the selection in `experimentalChecks`. Its default is an empty array. Only the two IDs above are accepted. The JSON editor also accepts either check individually.
+The live configuration stores the selection in `experimentalChecks`. Its default is an empty array. The JSON editor accepts either check individually. The legacy ID `redundant-negative-clarification` is accepted as an alias for `unnecessary-qualification`, including with older catalogs. Selecting both aliases is rejected.
+
+To complete the rename, update the check ID and process references in the catalog, regenerate its coverage report, and replace the old ID in the live `experimentalChecks` array. Keep the question, examples, threshold, and preservation policy unchanged. The check covers unnecessary affirmative and negative qualifications.
 
 The runtime marks selected checks active without changing their catalog status or calibration evidence. Expanded verdicts, `/reply-guard verdict`, and `/reply-guard coverage` label them experimental and uncalibrated. Passing banners follow the `showVerdicts` preference. Stale definitions and stale calibration cannot be reactivated through the trial.
 
-The trial uses each check's existing threshold. The house catalog currently uses 0.9. It retains exact-source protection, all preservation checks, audit budgets, the rewrite cap, and the tool-free writer. Under warning release, a rejected revision leaves the latest preservation-approved reply visible, even when that reply still has a style violation.
+The trial uses each check's existing threshold. The house catalog uses 0.9 for formulaic contrast and 0.6 for unnecessary qualifications. It retains exact-source protection, all preservation checks, audit budgets, the rewrite cap, and the tool-free writer. Under warning release, a rejected revision leaves the latest preservation-approved reply visible, even when that reply still has a style violation.
 
 Experimental activation does not qualify as reviewed promotion. The [held-out calibration requirements](calibration.md#review-and-promote) remain unchanged.
 

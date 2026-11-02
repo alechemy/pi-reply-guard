@@ -5,7 +5,7 @@ export const skill = "# Fictional test policy\n\nPreserve meaning.\n\n## Pattern
 export function makeTrialCatalog() {
   const catalog = makeCatalog();
   catalog.checks.find((check) => check.id === "fictional-9").id = "formulaic-contrast";
-  catalog.checks.find((check) => check.id === "fictional-35").id = "redundant-negative-clarification";
+  catalog.checks.find((check) => check.id === "fictional-35").id = "unnecessary-qualification";
   return catalog;
 }
 
