@@ -1,6 +1,6 @@
 # Rule catalog and Markdown checks
 
-The catalog maps all 36 Unslop rules to 46 checks. The two literal predicates are active for eligible prose. The 44 semantic questions are advisory, with an experimental violation threshold of 0.9. The catalog contains 138 synthetic examples. None establishes calibration accuracy.
+The catalog maps all 36 Unslop rules to 47 checks. The two literal predicates are active for eligible prose. The 45 semantic questions are advisory. Experimental thresholds are 0.9, except for unnecessary qualification at 0.6. The catalog contains 154 synthetic examples. None establishes calibration accuracy.
 
 The catalog feeds the [per-rule evaluator](evaluation.md), which provides bounded Jev execution and diagnostic auditing. The Pi entry point uses this evaluator with [preservation-checked repair](repair.md) and [delivery policies](delivery.md).
 
@@ -25,7 +25,7 @@ Source, ruleset, preprocessing, detector, and protection metadata are shared in 
 
 `inspectCatalog()` compares every numbered source rule and its location with the catalog. Added, removed, changed, or unmapped rules produce diagnostics. Policy changes before the numbered rules invalidate all mappings. Stale local checks are unavailable. Unaffected findings remain available alongside the incomplete catalog status.
 
-The schema rejects activation of uncalibrated semantic checks in the catalog. The [experimental trial](experimental.md) applies an explicit runtime override for two named checks while retaining their uncalibrated evidence. [Promotion](calibration.md#review-and-promote) consumes an explicitly approved held-out record with qualifying per-check error counts and version bindings. Process requirements are recorded separately and are never reported as verified mental activity.
+The schema rejects activation of uncalibrated semantic checks in the catalog. The [experimental trial](experimental.md) applies an explicit runtime override for three named checks while retaining their uncalibrated evidence. [Promotion](calibration.md#review-and-promote) consumes an explicitly approved held-out record with qualifying per-check error counts and version bindings. Process requirements are recorded separately and are never reported as verified mental activity.
 
 ## Inspect and audit
 

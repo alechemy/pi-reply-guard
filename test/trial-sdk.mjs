@@ -43,12 +43,12 @@ test("experimental semantic trial through the native Pi package", async (t) => {
       const data = f.results()[0].data;
       assert.equal(data.reply, expected);
       assert.equal(data.rewrites, 1);
-      assert.equal(data.candidates[0].audit.checks.filter((check) => check.experimental).length, 2);
+      assert.equal(data.candidates[0].audit.checks.filter((check) => check.experimental).length, 3);
       assert.equal(data.candidates[1].preserved, reply === good);
       assert.ok(data.audit.checks.filter((check) => check.experimental).every((check) => check.calibration.state === "uncalibrated"));
       if (reply === good) assert.match(f.render(300), /1 rewrite attempt.*rewritten reply released \(passed\)/);
-      else assert.match(f.render(240), /2 experimental active \(uncalibrated\)/);
-      assert.match(f.render(240, true, true), /2 experimental active \(uncalibrated\)/);
+      else assert.match(f.render(240), /3 experimental active \(uncalibrated\)/);
+      assert.match(f.render(240, true, true), /3 experimental active \(uncalibrated\)/);
       assert.deepEqual(assistantText(f.sessionManager.buildSessionProjection().messages), [expected]);
       await f.session.prompt("Refer to the retention instruction.");
       assert.deepEqual(assistantText(f.requests[1].messages), [expected]);

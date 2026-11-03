@@ -8,7 +8,7 @@ import { makeCatalog, makeTrialCatalog, skill } from "./fixtures/catalog.mjs";
 
 const catalog = inspectCatalog(makeTrialCatalog(), skill);
 
-test("experimental opt-in is limited to the two named semantic checks", () => {
+test("experimental opt-in is limited to the three named semantic checks", () => {
   for (const value of [null, true, "formulaic-contrast", ["em-dash"], ["preserve-negation"], ["fictional-1"], ["formulaic-contrast", "formulaic-contrast"], [{}]]) {
     assert.throws(() => validateExperimentalChecks(value), /experimentalChecks/);
   }
@@ -20,7 +20,7 @@ test("experimental opt-in is limited to the two named semantic checks", () => {
 test("qualification rename accepts legacy settings and catalogs without duplicating enforcement", () => {
   const oldId = "redundant-negative-clarification";
   const newId = "unnecessary-qualification";
-  assert.deepEqual(EXPERIMENTAL_CHECKS, ["formulaic-contrast", newId]);
+  assert.deepEqual(EXPERIMENTAL_CHECKS, ["formulaic-contrast", "underspecified-behavior", newId]);
   assert.deepEqual(validateExperimentalChecks([oldId]), [newId]);
   assert.throws(() => validateExperimentalChecks([oldId, newId]), /unique IDs/);
   for (const catalogId of [oldId, newId]) {
@@ -52,8 +52,8 @@ test("the runtime opt-in preserves the catalog and its uncalibrated evidence", (
   assert.equal(trial.catalog, catalog.catalog);
   assert.equal(trial.catalogDigest, catalog.catalogDigest);
   assert.equal(withExperimentalChecks(catalog, [...EXPERIMENTAL_CHECKS].reverse()).catalogDigest, trial.catalogDigest);
-  assert.deepEqual(trial.checks.filter((check) => check.experimental).map((check) => check.id), EXPERIMENTAL_CHECKS);
-  assert.equal(trial.checks.filter((check) => check.status === "active").length, 4);
+  assert.deepEqual(trial.checks.filter((check) => check.experimental).map((check) => check.id).sort(), EXPERIMENTAL_CHECKS);
+  assert.equal(trial.checks.filter((check) => check.status === "active").length, 5);
   for (const check of trial.checks.filter((check) => check.experimental)) {
     assert.equal(check.calibration.state, "uncalibrated");
     assert.equal(check.calibration.threshold, 0.9);

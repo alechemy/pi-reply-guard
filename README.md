@@ -1,6 +1,6 @@
 # pi-reply-guard
 
-This fork of [amalavet/pi-reply-guard](https://github.com/amalavet/pi-reply-guard) audits completed assistant reply prose and repairs active violations with an isolated, tool-free writer. The Unslop catalog maps all 36 rules to 46 checks. The two literal checks enforce immediately. The 44 semantic style checks default to advisory. An [experimental opt-in](docs/experimental.md) lets formulaic contrast and redundant negative clarification trigger repairs before calibration.
+This fork of [amalavet/pi-reply-guard](https://github.com/amalavet/pi-reply-guard) audits completed assistant reply prose and repairs active violations with an isolated, tool-free writer. The Unslop catalog maps all 36 rules to 47 checks. The two literal checks enforce immediately. The 45 semantic style checks default to advisory. An [experimental opt-in](docs/experimental.md) lets formulaic contrast, underspecified behavior, and unnecessary qualification trigger repairs before calibration.
 
 The package entry point now uses the per-rule evaluator and preservation-checked repair engine. It is tested against Pi 1.4.0. [Calibration tools](docs/calibration.md) provide corpus import, bounded evaluation, and reviewed per-rule promotion. The deployed `6dd3a18` revision includes the served-model identity correction and passes authenticated auditing, repair, and cancellation checks. See [deployment verification](docs/deployment.md) and [implementation status](docs/implementation.md).
 
@@ -16,7 +16,7 @@ The package entry point now uses the per-rule evaluator and preservation-checked
 | `/reply-guard off` | Disables checking and repair for new replies. |
 | `/reply-guard observe` | Audits the original reply without rewriting or withholding it. |
 | `/reply-guard enforce` | Repairs active violations within the configured budget. |
-| `/reply-guard trial on` | Opts the two supported semantic checks into experimental enforcement. |
+| `/reply-guard trial on` | Opts the three supported semantic checks into experimental enforcement. |
 | `/reply-guard trial off` | Removes the experimental opt-in. |
 | `/reply-guard warning` | Releases the latest preservation-approved candidate with its own verdict. |
 | `/reply-guard strict` | Withholds automatic delivery when required checks fail or remain incomplete. |

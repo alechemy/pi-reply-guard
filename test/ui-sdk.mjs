@@ -54,7 +54,7 @@ test("quiet verdicts and transient footer through native Pi rendering", async (t
     try {
       await f.session.prompt("Give the instruction.");
       assertQuiet(f);
-      assert.match(f.render(240, true, true), /2 experimental active \(uncalibrated\)/);
+      assert.match(f.render(240, true, true), /3 experimental active \(uncalibrated\)/);
     } finally { f.session.dispose(); }
   });
   await t.test("successful rewrites show the attempt count even when passing banners are hidden", async () => {
